@@ -8,7 +8,7 @@ from einops import rearrange
 from liegroups.torch import SE3
 from tqdm import trange
 
-from dataset.finetune import FinetuneIterableDataset
+from dataset.finetune import FinetuneIterableDataset, MyFinetuneDataset
 from dataset.inference import MultiImageInferenceDataset, SingleImageInferenceDataset
 from util.pose import latlon2mat, make_T, mat2latlon
 from util.typing import *
@@ -46,9 +46,12 @@ def optimize_pose_loop(
             theta, azimuth = latlon[0], latlon[1]
             distance = (
                 torch.sin(torch.norm(T_[:3, 3]) - default_radius) * search_radius_range
-            )
+                # torch.clamp(torch.norm(T_[:3, 3]) - default_radius,min= -search_radius_range, max= search_radius_range)
+                # torch.norm(T_[:3, 3]) - default_radius
+            ) # distance is the offset from the default radius, but why sin and times scale?
 
-            idx = [0, 1] if torch.rand(1) < 0.5 else [1, 0]
+            # idx = [0, 1] if torch.rand(1) < 0.5 else [1, 0] # on every step randomly choose train r2q or q2r. Why not both?
+            idx = [0, 1]  # on every step randomly choose train r2q or q2r. Why not both?
             batch = {
                 "image_cond": image_cond[idx],
                 "image_target": image_target[idx],
@@ -64,14 +67,31 @@ def optimize_pose_loop(
                 loss = model(batch, step_ratio=step / args.max_step)
             else:
                 loss = model(batch)
-
             total_loss += loss
+            # region inv_batch
+            idx = [1, 0]
+            batch = {
+                "image_cond": image_cond[idx],
+                "image_target": image_target[idx],
+                "T": torch.stack(
+                    (
+                        make_T(theta, azimuth, distance),
+                        make_T(-theta, -azimuth, -distance),
+                    )
+                )[idx].to(model.device),
+            }
+
+            if use_step_ratio:
+                inv_loss = model(batch, step_ratio=step / args.max_step)
+            else:
+                inv_loss = model(batch)
+            # endregion
+            total_loss += inv_loss
 
             pbar.set_description(
-                f"step: {step}, total_loss: {total_loss:.4f}, loss: {loss.item():.2f}, theta: {theta.rad2deg().item():.2f}, azimuth: {azimuth.rad2deg().item():.2f}, distance: {distance.item():.2f}"
+                f"step: {step+1}, lr: {scheduler.get_last_lr()[0]:.4f}, total_loss: {total_loss:.4f}, loss: {loss.item():.2f}, theta: {theta.rad2deg().item():.2f}, azimuth: {azimuth.rad2deg().item():.2f}, distance: {distance.item():.2f}"
             )
-
-            loss.backward()
+            (loss+inv_loss).backward()
             optimizer.step()
             scheduler.step(total_loss)
 
@@ -200,6 +220,56 @@ def finetune(
     model.remove_lora()
 
 
+
+def my_finetune(
+    model,
+    scenes: List[str],
+    ids: List[str],
+    image_dir: str,
+    transform_fp: str,
+    lora_ckpt_fp: str,
+    lora_rank: int,
+    lora_target_replace_module: List[str],
+    args,
+):
+    model.inject_lora(
+        rank=lora_rank,
+        target_replace_module=lora_target_replace_module,
+    )
+    
+    # rand scenes index -> batch size scene
+    # rand ids index -> 1 for all scene (2 index, 1 for ref., 1 for target)
+    # run model from another ids (same scene, same target) to get the loss
+    scene_idxs = torch.randint(0, len(scenes), (args.batch_size,), device=model.device)
+    img_idxs, next_img_idxs = torch.randint(0, len(ids), (2), device=model.device)
+    next_img_idxs[1] = img_idxs[1]  # make sure the second image has the same idx for all scenes
+
+    train_dataset = MyFinetuneDataset(image_dir, transform_fp)
+    train_loader = train_dataset.loader(args.batch_size)
+    optimizer = parse_optimizer(args.optimizer, model.require_grad_params)
+    scheduler = parse_scheduler(args.scheduler, optimizer)
+
+    train_loader = iter(train_loader)
+    with trange(args.max_step) as pbar:
+        for step in pbar:
+            optimizer.zero_grad()
+
+            batch = next(train_loader)
+            batch = {k: v.to(model.device) for k, v in batch.items()}
+            # nvs_a = model(batch)
+            # nvs_b = model(batch)
+            # loss = inconsistency(nvs_a, nvs_b) # l2 or met3r
+            
+            loss = 0
+            pbar.set_description(f"step: {step}, loss: {loss.item():.4f}")
+            loss.backward()
+
+            optimizer.step()
+            scheduler.step(loss)
+
+    model.save_lora(lora_ckpt_fp)
+    model.remove_lora()
+
 def inference(
     model,
     image_dir: str,
@@ -246,7 +316,7 @@ def inference(
     if lora_ckpt_fp:
         model.remove_lora()
 
-    out = rearrange(out, "b c h w -> 1 c h (b w)")
+    # out = rearrange(out, "b c h w -> 1 c h (b w)")
     plot_image(out, fp=demo_fp)
     print(f"[INFO] Saved image to {demo_fp}")
 

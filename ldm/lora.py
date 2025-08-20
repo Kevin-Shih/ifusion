@@ -327,7 +327,7 @@ def inject_trainable_lora_extended(
     names = []
 
     if loras != None:
-        loras = torch.load(loras, map_location=model.device)
+        loras = torch.load(loras, map_location=model.device, weights_only=True)
 
     for _module, name, _child_module in _find_modules(
         model, target_replace_module, search_class=[nn.Linear, nn.Conv2d]

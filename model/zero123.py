@@ -72,14 +72,14 @@ class Zero123(nn.Module):
 
         print("[INFO] Loaded Zero123")
 
-    @torch.cuda.amp.autocast(enabled=False)
+    @torch.amp.autocast('cuda', enabled=False)
     def set_min_max_steps(
         self, min_step_percent: float = 0.02, max_step_percent: float = 0.98
     ):
         self.min_step = int(self.num_train_timesteps * min_step_percent)
         self.max_step = int(self.num_train_timesteps * max_step_percent)
 
-    @torch.cuda.amp.autocast(enabled=False)
+    @torch.amp.autocast('cuda', enabled=False)
     @torch.no_grad()
     def get_image_embeds(
         self, image: Float[Tensor, "B 3 256 256"]
@@ -88,7 +88,7 @@ class Zero123(nn.Module):
         c_concat = self.model.encode_first_stage(image.to(self.weights_dtype)).mode()
         return c_crossattn, c_concat
 
-    @torch.cuda.amp.autocast(enabled=False)
+    @torch.amp.autocast('cuda', enabled=False)
     def encode_image(
         self, image: Float[Tensor, "B 3 256 256"]
     ) -> Float[Tensor, "B 4 32 32"]:
@@ -98,7 +98,7 @@ class Zero123(nn.Module):
         )
         return latent.to(input_dtype)  # [B, 4, 32, 32] Latent space image
 
-    @torch.cuda.amp.autocast(enabled=False)
+    @torch.amp.autocast('cuda', enabled=False)
     def decode_latent(
         self,
         latent: Float[Tensor, "B 4 H W"],
@@ -114,7 +114,7 @@ class Zero123(nn.Module):
         """Add zeros to the beginning of cond"""
         return {k: [torch.cat([torch.zeros_like(v), v])] for k, v in cond.items()}
 
-    @torch.cuda.amp.autocast(enabled=False)
+    @torch.amp.autocast('cuda', enabled=False)
     @torch.no_grad()
     def clip_camera_projection(
         self,
@@ -169,7 +169,7 @@ class Zero123(nn.Module):
         self.require_grad_params = []
         return self
 
-    @torch.cuda.amp.autocast(enabled=False)
+    @torch.amp.autocast('cuda', enabled=False)
     def forward(self, batch, step_ratio=None):
         batch["image_cond"] = rearrange(batch["image_cond"], "b c h w -> b h w c")
         batch["image_target"] = rearrange(batch["image_target"], "b c h w -> b h w c")

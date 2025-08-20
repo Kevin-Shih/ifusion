@@ -52,7 +52,7 @@ def scale(s):
     )
 
 
-def latlon2mat(latlon, in_deg=True, default_radius=1.0):
+def latlon2mat(latlon, in_deg=True, default_radius=1.0): # latlon = sph coordinates (theta, azimuth, radius)
     if latlon.shape[-1] == 2:
         radius = torch.ones_like(latlon[:, 0]) * default_radius
         latlon = torch.cat((latlon, radius.unsqueeze(1)), dim=1)
