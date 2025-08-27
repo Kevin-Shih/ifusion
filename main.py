@@ -83,7 +83,7 @@ def main(config, mode, gpu_ids):
         project="iFusion-Adv",
         group= f'{config.log.group_name}',
         name= f'{config.log.run_name}_{mday:02d}_{hours:02d}-{mins:04.1f}',
-        settings=wandb.Settings(x_disable_stats=True),
+        settings=wandb.Settings(x_disable_stats=True, x_save_requirements=False),
         config={
                 "start_date": f'{mon:02d}-{mday:02d}',
                 "start_time": f'{hours:02d}-{mins:04.1f}',
