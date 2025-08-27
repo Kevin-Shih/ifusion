@@ -2,7 +2,8 @@ import argparse
 import itertools
 import multiprocessing
 import os
-
+import wandb
+import time
 
 from dataset.base import load_frames
 from ifusion import finetune, inference, optimize_pose, my_finetune
@@ -66,11 +67,35 @@ def main(config, mode, gpu_ids):
             gen_nvs_all(model, config, scenes, ids)
         if mode[2]:
             gen_nvs_my_finetune(model, config, scenes, ids)
+    config, conf_dict = config
 
-    perm = list(itertools.combinations(range(5), 2))
+    perm = list(itertools.combinations(range(3), 2))
     ids = [",".join(map(str, p)) for p in perm]
     gpu_ids = str2list(gpu_ids)
     scenes = sorted(os.listdir(f"{config.data.root_dir}/{config.data.name}"))[0:5]
+
+    curr_time = time.localtime(time.time())
+    mon, mday, hours = curr_time.tm_mon, curr_time.tm_mday, curr_time.tm_hour
+    mins = curr_time.tm_min + curr_time.tm_sec / 60
+    wb_run = wandb.init(
+        dir="./wandb/finetune",
+        entity="kevin-shih",
+        project="iFusion-Adv",
+        group= f'{config.log.group_name}',
+        name= f'{config.log.run_name}_{mday:02d}_{hours:02d}-{mins:04.1f}',
+        settings=wandb.Settings(x_disable_stats=True),
+        config={
+                "start_date": f'{mon:02d}-{mday:02d}',
+                "start_time": f'{hours:02d}-{mins:04.1f}',
+                'mode':{
+                    'pose':  mode[0],
+                    'zero123_nvs':  mode[1] and config.finetune is None,
+                    'iFusion_finetune':  mode[1] and config.finetune is not None,
+                    'my_finetune':  mode[2],
+                },
+                **conf_dict,
+        },
+    )
 
     # split scenes and multi-process
     scenes = split_list(scenes, len(gpu_ids))
@@ -82,7 +107,7 @@ def main(config, mode, gpu_ids):
 
     for p in processes:
         p.join()
-
+    wb_run.finish()
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -93,6 +118,5 @@ if __name__ == "__main__":
     parser.add_argument("--gpu_ids", type=str, default="0")
     args, extras = parser.parse_known_args()
     config = load_config(args.config, cli_args=extras)
-
-    set_random_seed(config.seed)
+    set_random_seed(config[0].seed)
     main(config, [args.pose, args.nvs, args.my_nvs], args.gpu_ids)

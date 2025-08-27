@@ -8,18 +8,18 @@ from util.ssim import SSIM
 lpips_net = LPIPS(net="vgg").to("cuda")
 
 
-def psnr_fn(pred, gt):
+def psnr_fn(pred, gt)->torch.Tensor:
     mse = torch.mean((pred - gt) ** 2, dim=(1, 2, 3))
     psnr = 10.0 * torch.log10(1.0 / mse).mean()
     return psnr
 
 
-def ssim_fn(pred, gt):
+def ssim_fn(pred, gt)->torch.Tensor:
     ssim_loss = SSIM(window_size = 11)
     return ssim_loss(pred, gt)
 
 
-def lpips_fn(pred, gt):
+def lpips_fn(pred, gt)->torch.Tensor:
     assert pred.min() >= 0 and pred.max() <= 1 and gt.min() >= 0 and gt.max() <= 1
     return lpips_net(pred * 2 - 1, gt * 2 - 1).mean()
 

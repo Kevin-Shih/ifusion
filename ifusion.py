@@ -67,7 +67,7 @@ def optimize_pose_loop(
                 loss = model(batch, step_ratio=step / args.max_step)
             else:
                 loss = model(batch)
-            total_loss += loss
+            total_loss = 1.1 * total_loss + loss
             # region inv_batch
             idx = [1, 0]
             batch = {
@@ -86,7 +86,7 @@ def optimize_pose_loop(
             else:
                 inv_loss = model(batch)
             # endregion
-            total_loss += inv_loss
+            total_loss = 1.1 * total_loss + inv_loss
 
             pbar.set_description(
                 f"step: {step+1}, lr: {scheduler.get_last_lr()[0]:.4f}, total_loss: {total_loss:.4f}, loss: {loss.item():.2f}, theta: {theta.rad2deg().item():.2f}, azimuth: {azimuth.rad2deg().item():.2f}, distance: {distance.item():.2f}"

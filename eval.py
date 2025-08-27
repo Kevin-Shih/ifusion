@@ -1,15 +1,16 @@
 import argparse
 import itertools
 import os
-
-import numpy as np
+import wandb
 import torch
+import numpy as np
 
 from dataset.base import load_frames
-
 from util.criterion import lpips_fn, pose_err_fn, psnr_fn, ssim_fn
 from util.util import load_config, load_image, set_random_seed, str2list
 from util.pose import mat2latlon
+
+from rich import print
 from met3r import MEt3R
 from PIL import Image
 
@@ -73,9 +74,12 @@ def eval_pose(transform_fp, gt_transform_fp, image_dir, exp_dir, id, **kwargs):
     print(f"Rot. error: {pose_err[0]:.2f}, Trans. error: {pose_err[1]:.2f}")
     return pose_err
 
-def eval_nvs(demo_fp, test_image_dir, test_transform_fp, **kwargs):
+def eval_nvs(demo_fp, test_image_dir, test_transform_fp, **kwargs)->tuple[float,float,float]:
     pred = load_image(demo_fp, resize=False, to_clip=False)
+    print(f'[INFO 1] Loaded demo image {demo_fp} with shape {pred.shape}')
     pred = torch.cat(torch.chunk(pred, 8, dim=-1))
+    print(f'[INFO 2] chunked demo image shape {torch.chunk(pred, 8, dim=-1).shape}')
+    print(f'[INFO 3] chunk and cat demo image shape {pred.shape}')
     gt = load_frames(test_image_dir, test_transform_fp, to_clip=False)[0]
     gt = gt.to(pred.device)
 
@@ -84,14 +88,14 @@ def eval_nvs(demo_fp, test_image_dir, test_transform_fp, **kwargs):
     lpips = lpips_fn(pred, gt).item()
     return psnr, ssim, lpips
 
-def eval_pose_all(config, scenes, ids):
+def eval_pose_all(config, scenes, ids, wb_run):
     metric = []
-    scenes = [scenes[0], scenes[2]]
-    ids = [ids[0], ids[3]]
-    # for scene in scenes:
-    #     for id in ids:
-    for scene, id in zip(scenes, ids):
-            print(f"[INFO] Evaluating pose {scene}:{id}")
+    # scenes = [scenes[0], scenes[2]]
+    # ids = [ids[0], ids[3]]
+    # for scene, id in zip(scenes, ids):
+    for scene in scenes:
+        for id in ids:
+            print(f"[INFO] Evaluating pose \'{scene}\':{id}")
             config.data.scene = scene
             config.data.id = id
             pose_err = eval_pose(**config.data)
@@ -99,11 +103,22 @@ def eval_pose_all(config, scenes, ids):
             metric.append(pose_err)
     metric = np.array(metric)
     np.savez(f"{config.data.exp_root_dir}/pose_{config.data.name}.npz", metric)
-
+    if wb_run:
+        rot_p25, rot_p50, rot_p75 = np.percentile(metric[:, 0], [25, 50, 75])
+        trans_p25, trans_p50, trans_p75 = np.percentile(metric[:, 1], [25, 50, 75])
+        wb_run.summary['Pose/Recall(<=5)']  = sum(metric[:, 0] <=  5) / len(metric)
+        wb_run.summary['Pose/Recall(<=15)'] = sum(metric[:, 0] <= 15) / len(metric)
+        wb_run.summary['Pose/Recall(<=30)'] = sum(metric[:, 0] <= 30) / len(metric)
+        wb_run.summary['Pose/Rot. error (p25)']      = rot_p25
+        wb_run.summary['Pose/Rot. error (median)']   = rot_p50
+        wb_run.summary['Pose/Rot. error (p75)']      = rot_p75
+        wb_run.summary['Pose/Trans. error (p25)']    = trans_p25
+        wb_run.summary['Pose/Trans. error (median)'] = trans_p50
+        wb_run.summary['Pose/Trans. error (p75)']    = trans_p75
     # NOTE: report the median error and recall < 5 degree
-    print(f"Rot. error: {np.median(metric[:, 0]):.3f}, Trans. error: {np.median(metric[:, 1]):.3f}, Recall <=5: {sum(metric[:, 0] <= 5) / len(metric)}, Recall <=15: {sum(metric[:, 0] <= 15) / len(metric)}, Recall <=30: {sum(metric[:, 0] <= 30) / len(metric)}")
+    print(f"Rot. error: {np.median(metric[:, 0]):.3f}, Trans. error: {np.median(metric[:, 1]):.3f}, Recall <=5: {sum(metric[:, 0] <= 5) / len(metric):.3f}, Recall <=15: {sum(metric[:, 0] <= 15) / len(metric):.3f}, Recall <=30: {sum(metric[:, 0] <= 30) / len(metric):.3f}")
 
-def eval_consistency_all(config, scenes, ids):
+def eval_consistency_all(config, scenes, ids, wb_run):
     met3r_eval = MEt3R(
         img_size=256, # Default to 256, set to `None` to use the input resolution on the fly!
         use_norm=True, # Default to True 
@@ -115,11 +130,11 @@ def eval_consistency_all(config, scenes, ids):
         freeze=True, # Default to True
     ).cuda()
     consistency_metric = []
-    scenes = [scenes[0], scenes[2]]
-    ids = [ids[0], ids[3]]
-    # for scene in scenes:
-    #     for id in ids:
-    for scene, id in zip(scenes, ids):
+    # scenes = [scenes[0], scenes[2]]
+    # ids = [ids[0], ids[3]]
+    # for scene, id in zip(scenes, ids):
+    for scene in scenes:
+        for id in ids:
             print(f"[INFO] Evaluating consistency {scene}:{id}")
             config.data.scene = scene
             config.data.id = id
@@ -128,12 +143,24 @@ def eval_consistency_all(config, scenes, ids):
             consistency_metric.append(consistency_score)
     consistency_metric = np.array(consistency_metric)
     # np.savez(f"{config.data.exp_root_dir}/pose_{config.data.name}.npz", metric)
+    if wb_run:
+        MEt3R_mean = np.mean(consistency_metric[:])
+        MEt3R_p25, MEt3R_p50, MEt3R_p75 = np.percentile(consistency_metric[:], [25, 50, 75])
+        wb_run.summary['Consistentcy/Recall(<=0.1)'] = sum(consistency_metric[:] <= 0.1) / len(consistency_metric)
+        wb_run.summary['Consistentcy/Recall(<=0.2)'] = sum(consistency_metric[:] <= 0.2) / len(consistency_metric)
+        wb_run.summary['Consistentcy/Recall(<=0.3)'] = sum(consistency_metric[:] <= 0.3) / len(consistency_metric)
+        wb_run.summary['Consistentcy/MEt3R error (p25)']      = MEt3R_p25
+        wb_run.summary['Consistentcy/MEt3R error (median)']   = MEt3R_p50
+        wb_run.summary['Consistentcy/MEt3R error (p75)']      = MEt3R_p75
+        wb_run.summary['Consistentcy/MEt3R error (mean)']     = MEt3R_mean
+    print(f"Consistency score: {MEt3R_mean:.3f}, Recall: {sum(consistency_metric[:] <= 0.1) / len(consistency_metric):.3f}")
 
-    print(f"Consistency score: {np.mean(consistency_metric[:]):.3f}, Recall: {sum(consistency_metric[:] <= 0.1) / len(consistency_metric):.3f}")
 
-
-def eval_nvs_all(config, scenes, ids):
+def eval_nvs_all(config, scenes, ids, wb_run):
     metric = []
+    # scenes = [scenes[0], scenes[2]]
+    # ids = [ids[0], ids[3]]
+    # for scene, id in zip(scenes, ids):
     for scene in scenes:
         for id in ids:
             print(f"[INFO] Evaluating nvs {scene}:{id}")
@@ -142,22 +169,70 @@ def eval_nvs_all(config, scenes, ids):
             metric.append(eval_nvs(**config.data))
     metric = np.array(metric)
     np.savez(f"{config.data.exp_root_dir}/nvs_{config.data.name}.npz", metric)
+    if wb_run:
+        PSNR_p25, PSNR_p50, PSNR_p75    = np.percentile(metric[:, 0], [25, 50, 75])
+        SSIM_p25, SSIM_p50, SSIM_p75    = np.percentile(metric[:, 1], [25, 50, 75])
+        LPIPS_p25, LPIPS_p50, LPIPS_p75 = np.percentile(metric[:, 2], [25, 50, 75])
+        PSNR_mean  = np.mean(metric[:, 0])
+        SSIM_mean  = np.mean(metric[:, 1])
+        LPIPS_mean = np.mean(metric[:, 2])
+        wb_run.summary['NVS/PSNR (p25)']     = PSNR_p25
+        wb_run.summary['NVS/PSNR (median)']  = PSNR_p50
+        wb_run.summary['NVS/PSNR (p75)']     = PSNR_p75
+        wb_run.summary['NVS/SSIM (p25)']     = SSIM_p25
+        wb_run.summary['NVS/SSIM (median)']  = SSIM_p50
+        wb_run.summary['NVS/SSIM (p75)']     = SSIM_p75
+        wb_run.summary['NVS/LPIPS (p25)']    = LPIPS_p25
+        wb_run.summary['NVS/LPIPS (median)'] = LPIPS_p50
+        wb_run.summary['NVS/LPIPS (p75)']    = LPIPS_p75
+        wb_run.summary['NVS/PSNR  (mean)']   = PSNR_mean
+        wb_run.summary['NVS/SSIM  (mean)']   = SSIM_mean
+        wb_run.summary['NVS/LPIPS (mean)']   = LPIPS_mean
     print(
         f"PSNR: {metric[:, 0].mean()}, SSIM: {metric[:, 1].mean()}, LPIPS: {metric[:, 2].mean()}"
     )
 
 
 def main(config, mode):
-    perm = list(itertools.combinations(range(5), 2))
+    config, conf_dict = config
+    if config.log is None:
+        wb_run = None
+    elif config.log.run_path:
+        print(f'[INFO] Resuming wandb run from \'{config.log.run_path}\'. Ignoring group_name and run_name arguments.')
+        wb_run = wandb.init(
+            dir="../wandb/eval",
+            entity="kevin-shih",
+            project="iFusion-Adv",
+            id=f"{config.log.run_path.split('/')[-1]}",
+            resume="must",
+        )
+        if config.log.run_name and wb_run.name != config.log.run_name:
+            print(f'[ERROR] run_name argument \'{config.log.run_name}\' does not match the name of the resumed run \'{wb_run.name}\'. Aborting.')
+            wb_run.finish(exit_code=-1)
+            exit(-1)
+    else:
+        wb_run = wandb.init(
+            dir="./wandb/eval",
+            entity="kevin-shih",
+            project="iFusion-Adv",
+            group= f'{config.log.group_name}',
+            name= f'{config.log.run_name}',
+            settings=wandb.Settings(x_disable_stats=True),
+            config={
+                    **conf_dict,
+            },
+        )
+    perm = list(itertools.combinations(range(3), 2))
     ids = [",".join(map(str, p)) for p in perm]
-    scenes = sorted(os.listdir(f"{config.data.root_dir}/{config.data.name}"))[0:3]
+    scenes = sorted(os.listdir(f"{config.data.root_dir}/{config.data.name}"))[0:5]
     print(f"[INFO] Found {len(scenes)} scenes: {scenes}")
     if mode[0]:
-        eval_pose_all(config, scenes, ids)
+        eval_pose_all(config, scenes, ids=ids, wb_run=wb_run)
     if mode[1]:
-        eval_nvs_all(config, scenes, ids=["0,1"])
+        eval_nvs_all(config, scenes, ids=ids, wb_run=wb_run)
     if mode[2]:
-        eval_consistency_all(config, scenes, ids)
+        eval_consistency_all(config, scenes, ids=ids, wb_run=wb_run)
+    wb_run.finish()
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -169,6 +244,6 @@ if __name__ == "__main__":
     args, extras = parser.parse_known_args()
     config = load_config(args.config, cli_args=extras)
     
-    set_random_seed(config.seed)
+    set_random_seed(config[0].seed)
     os.environ["CUDA_VISIBLE_DEVICES"] = str(args.gpu_ids)
     main(config, [args.pose, args.nvs, args.consistency])
