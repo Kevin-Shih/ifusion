@@ -23,23 +23,40 @@ def eval_consistency(met3r_eval, exp_dir, id, **kwargs):
             imgs.append(load_image(os.path.join(exp_dir, fp),verbose=False))
     imgs = torch.cat(imgs)
     inputs = []
+    # print(f'imgs lens : {imgs.shape[0] - 1}')
     for i in range(imgs.shape[0] - 1):
         inputs.append(torch.Tensor(imgs[i : i + 2]))
     inputs= torch.stack(inputs).cuda()
+    # fp_a = os.path.join(kwargs['image_dir'], '0.png')
+    # fp_b = os.path.join(kwargs['image_dir'], '0.png')
+    # a = load_image(fp_a,verbose=False)
+    # b = load_image(fp_b,verbose=False)
+    # print(f"Image A: {fp_a}\nImage B: {fp_b}")
+    # inputs = torch.cat((a, b)).cuda().unsqueeze(0)
     # inputs = torch.randn((8, 2, 3, 256, 256)).cuda()
     inputs = inputs.clip(-1, 1)
     score, mask, score_map = met3r_eval(
         images=inputs, 
         return_overlap_mask=True, # Default 
         return_score_map=True, # Default 
-        return_projections=True # Default 
+        return_projections=False # Default 
     )
+    # mask = mask.cpu()
+    # score_map = score_map.cpu()
     # Image.fromarray(((inputs[0, 0].permute(1, 2, 0) +1).cpu().numpy() / 2 * 255).astype(np.uint8)).save(f'{exp_dir}/input_{id[0]}.png')
     # Image.fromarray(((inputs[0, 1].permute(1, 2, 0) +1).cpu().numpy() / 2 * 255).astype(np.uint8)).save(f'{exp_dir}/input_{id[2]}.png')
+    # print(f'score map range : {score_map[0].min()} to {score_map[0].max()}')
+    # print(f'mask range : {mask[0].min()} to {mask[0].max()}')
     for i in range(score_map.shape[0]):
-        Image.fromarray(((score_map[i].cpu().numpy() +1) / 2 * 255).astype(np.uint8)).save(f'{exp_dir}/score_map_{i},{i+1}.png')
-    print(f'consistency score: {score.mean().item():.3f}')
-    return score.mean().item()
+        temp = torch.stack([score_map[i], score_map[i], score_map[i]], axis=-1).clamp(0,1) *  torch.stack([mask[i]+0.3, mask[i]+0.3, torch.full_like(mask[i], 0.8)], axis=-1).clamp(0,1)
+        Image.fromarray((score_map[i].clamp(0,1).cpu().numpy() * 255).astype(np.uint8)).save(f'{exp_dir}/score_map_{i},{i+1}.png')
+        Image.fromarray((temp * 255).cpu().numpy().astype(np.uint8)).save(f'{exp_dir}/score_map_masked_{i},{i+1}.png')
+        Image.fromarray((mask[i].clamp(0,1).cpu().numpy() * 255).astype(np.uint8)).save(f'{exp_dir}/mask_{i},{i+1}.png')
+        # Image.fromarray(((projections[i].cpu().numpy() +1) / 2 * 255).astype(np.uint8)).save(f'{exp_dir}/projections_{i},{i+1}.png')
+    np.set_printoptions(precision=3, suppress=None, floatmode='fixed')
+    print(f'consistency score: {score.cpu().numpy()}')
+    print(f'median: {score.median().item():.3f}, mean: {score.mean().item():.3f}')
+    return score.mean().item()#, score.median().item()
 
 def eval_pose(transform_fp, gt_transform_fp, image_dir, exp_dir, id, **kwargs):
     camtoworlds = load_frames(image_dir, transform_fp, verbose=False, return_images=True)[1]
@@ -69,8 +86,11 @@ def eval_nvs(demo_fp, test_image_dir, test_transform_fp, **kwargs):
 
 def eval_pose_all(config, scenes, ids):
     metric = []
-    for scene in scenes:
-        for id in ids:
+    scenes = [scenes[0], scenes[2]]
+    ids = [ids[0], ids[3]]
+    # for scene in scenes:
+    #     for id in ids:
+    for scene, id in zip(scenes, ids):
             print(f"[INFO] Evaluating pose {scene}:{id}")
             config.data.scene = scene
             config.data.id = id
@@ -81,7 +101,7 @@ def eval_pose_all(config, scenes, ids):
     np.savez(f"{config.data.exp_root_dir}/pose_{config.data.name}.npz", metric)
 
     # NOTE: report the median error and recall < 5 degree
-    print(f"Rot. error: {np.median(metric[:, 0])}, Trans. error: {np.median(metric[:, 1])}, Recall <=5: {sum(metric[:, 0] <= 5) / len(metric)}, Recall <=15: {sum(metric[:, 0] <= 15) / len(metric)}, Recall <=30: {sum(metric[:, 0] <= 30) / len(metric)}")
+    print(f"Rot. error: {np.median(metric[:, 0]):.3f}, Trans. error: {np.median(metric[:, 1]):.3f}, Recall <=5: {sum(metric[:, 0] <= 5) / len(metric)}, Recall <=15: {sum(metric[:, 0] <= 15) / len(metric)}, Recall <=30: {sum(metric[:, 0] <= 30) / len(metric)}")
 
 def eval_consistency_all(config, scenes, ids):
     met3r_eval = MEt3R(
@@ -95,8 +115,11 @@ def eval_consistency_all(config, scenes, ids):
         freeze=True, # Default to True
     ).cuda()
     consistency_metric = []
-    for scene in scenes:
-        for id in ids:
+    scenes = [scenes[0], scenes[2]]
+    ids = [ids[0], ids[3]]
+    # for scene in scenes:
+    #     for id in ids:
+    for scene, id in zip(scenes, ids):
             print(f"[INFO] Evaluating consistency {scene}:{id}")
             config.data.scene = scene
             config.data.id = id
@@ -142,8 +165,10 @@ if __name__ == "__main__":
     parser.add_argument("--consistency", action="store_true")
     parser.add_argument("--pose", action="store_true")
     parser.add_argument("--nvs", action="store_true")
+    parser.add_argument("--gpu_ids", type=str, default="4")
     args, extras = parser.parse_known_args()
     config = load_config(args.config, cli_args=extras)
-
+    
     set_random_seed(config.seed)
+    os.environ["CUDA_VISIBLE_DEVICES"] = str(args.gpu_ids)
     main(config, [args.pose, args.nvs, args.consistency])

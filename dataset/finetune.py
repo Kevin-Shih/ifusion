@@ -42,20 +42,21 @@ class MyFinetuneDataset(Dataset, BaseDataset):
         return len(self.perm)
 
     def __getitem__(self, index):
-        index_target, index_cond = (
+        index_cond1, index_target = (
             self.perm[index, 0].item(),
             self.perm[index, 1].item(),
         )
         # rand scenes index -> batch size scene
         # rand ids index -> 1 for all scene (2 index, 1 for ref., 1 for target)
         # run model from another ids (same scene, same target) to get the loss
-        scene_idxs = torch.randint(0, len(scenes), (args.batch_size,), device=model.device)
-        img_idxs, next_img_idxs = torch.randint(0, len(ids), (2), device=model.device)
-        next_img_idxs[1] = img_idxs[1]  # make sure the second image has the same idx for all scenes
+        index2 = torch.randint(0, len(self.perm), size=(1,)).item()
+        index_cond2 = self.perm[index2, 0].item()
         return {
-            "image_target": self.all_images[index_target],
-            "image_cond": self.all_images[index_cond],
-            "T": self.get_trans(self.all_camtoworlds[index_target], self.all_camtoworlds[index_cond], in_T=True),
+            "image_target": self.all_images[index_target], # B, C, H, W
+            "image_cond1": self.all_images[index_cond1], # B, C, H, W
+            "image_cond2": self.all_images[index_cond2], # B, C, H, W
+            "T1": self.get_trans(self.all_camtoworlds[index_target], self.all_camtoworlds[index_cond1], in_T=True), # B, 4 : [theta, torch.sin(azimuth), torch.cos(azimuth), distance]
+            "T2": self.get_trans(self.all_camtoworlds[index_target], self.all_camtoworlds[index_cond2], in_T=True), # B, 4 : [theta, torch.sin(azimuth), torch.cos(azimuth), distance]
         }
 
     def loader(self, batch_size=1, num_workers=8, **kwargs):
@@ -68,6 +69,26 @@ class MyFinetuneDataset(Dataset, BaseDataset):
             **kwargs,
         )
 
+class MyFinetuneIterableDataset(IterableDataset, MyFinetuneDataset):
+    def __init__(self, image_dir, transform_fp):
+        super().__init__(image_dir, transform_fp)
+
+    def __iter__(self):
+        while True:
+            index1, index2 = torch.randint(0, len(self.perm), size=(2,))
+            index_cond1, index_cond2, index_target = (
+                self.perm[index1, 0].item(),
+                self.perm[index2, 0].item(),
+                self.perm[index1, 1].item(),
+            )
+            # print(f'index_cond1:{index_cond1}')
+            yield {
+                "image_target": self.all_images[index_target],
+                "image_cond1": self.all_images[index_cond1],
+                "image_cond2": self.all_images[index_cond2],
+                "T1": self.get_trans(self.all_camtoworlds[index_target], self.all_camtoworlds[index_cond1], in_T=True),
+                "T2": self.get_trans(self.all_camtoworlds[index_target], self.all_camtoworlds[index_cond2], in_T=True),
+            }
 
 class FinetuneIterableDataset(IterableDataset, FinetuneDataset):
     def __init__(self, image_dir, transform_fp):

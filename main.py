@@ -47,10 +47,14 @@ def gen_nvs_all(model, config, scenes, ids):
                 inference(model, **config.inference)
 
 def gen_nvs_my_finetune(model, config, scenes, ids):
-    my_finetune(model, scenes, ids, **config.finetune)
-    for scene in scenes:
-        for id in ids:
-            inference(model, **config.inference)
+    scenes = [scenes[0], scenes[2]]
+    ids = [ids[0], ids[3]]
+    for scene, id in zip(scenes, ids):
+        print(f"[INFO] Fine-tuning {scene}")
+        config.data.scene = scene
+        config.data.id = id
+        my_finetune(model, scenes, ids, **config.finetune)
+        inference(model, **config.inference)
 
 def main(config, mode, gpu_ids):
     def worker(config, mode, scenes, ids, gpu_id):

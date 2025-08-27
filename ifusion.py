@@ -8,13 +8,13 @@ from einops import rearrange
 from liegroups.torch import SE3
 from tqdm import trange
 
-from dataset.finetune import FinetuneIterableDataset, MyFinetuneDataset
+from dataset.finetune import FinetuneIterableDataset, MyFinetuneIterableDataset
 from dataset.inference import MultiImageInferenceDataset, SingleImageInferenceDataset
 from util.pose import latlon2mat, make_T, mat2latlon
 from util.typing import *
 from util.util import load_image, parse_optimizer, parse_scheduler, str2list
 from util.viz import plot_image
-
+from PIL import Image
 
 def optimize_pose_loop(
     model,
@@ -230,6 +230,7 @@ def my_finetune(
     lora_ckpt_fp: str,
     lora_rank: int,
     lora_target_replace_module: List[str],
+    exp_dir: str,
     args,
 ):
     model.inject_lora(
@@ -240,15 +241,26 @@ def my_finetune(
     # rand scenes index -> batch size scene
     # rand ids index -> 1 for all scene (2 index, 1 for ref., 1 for target)
     # run model from another ids (same scene, same target) to get the loss
-    scene_idxs = torch.randint(0, len(scenes), (args.batch_size,), device=model.device)
-    img_idxs, next_img_idxs = torch.randint(0, len(ids), (2), device=model.device)
-    next_img_idxs[1] = img_idxs[1]  # make sure the second image has the same idx for all scenes
+    # scene_idxs = torch.randint(0, len(scenes), (args.batch_size,), device=model.device)
+    # img_idxs, next_img_idxs = torch.randint(0, len(ids), (2), device=model.device)
+    # next_img_idxs[1] = img_idxs[1]  # make sure the second image has the same idx for all scenes
 
-    train_dataset = MyFinetuneDataset(image_dir, transform_fp)
+    train_dataset = MyFinetuneIterableDataset(image_dir, transform_fp)
     train_loader = train_dataset.loader(args.batch_size)
     optimizer = parse_optimizer(args.optimizer, model.require_grad_params)
     scheduler = parse_scheduler(args.scheduler, optimizer)
-
+    
+    from met3r import MEt3R
+    met3r_eval = MEt3R(
+        img_size=256, # Default to 256, set to `None` to use the input resolution on the fly!
+        use_norm=True, # Default to True 
+        backbone="mast3r", # Default to MASt3R, select from ["mast3r", "dust3r", "raft"]
+        feature_backbone="dino16", # Default to DINO, select from ["dino16", "dinov2", "maskclip", "vit", "clip", "resnet50"]
+        feature_backbone_weights="mhamilton723/FeatUp", # Default
+        upsampler="featup", # Default to FeatUP upsampling, select from ["featup", "nearest", "bilinear", "bicubic"]
+        distance="cosine", # Default to feature similarity, select from ["cosine", "lpips", "rmse", "psnr", "mse", "ssim"]
+        freeze=True, # Default to True
+    ).cuda()
     train_loader = iter(train_loader)
     with trange(args.max_step) as pbar:
         for step in pbar:
@@ -256,16 +268,30 @@ def my_finetune(
 
             batch = next(train_loader)
             batch = {k: v.to(model.device) for k, v in batch.items()}
-            # nvs_a = model(batch)
-            # nvs_b = model(batch)
-            # loss = inconsistency(nvs_a, nvs_b) # l2 or met3r
-            
-            loss = 0
-            pbar.set_description(f"step: {step}, loss: {loss.item():.4f}")
+            noise_a, noise_b, noise, nvs_latent_a, nvs_latent_b = model(batch)
+            consist_loss = torch.nn.functional.mse_loss(noise_a, noise_b, reduction='mean')
+            noise_pred_loss = 0.5 * (torch.nn.functional.mse_loss(noise_a, noise, reduction='mean') + torch.nn.functional.mse_loss(noise_b, noise, reduction='mean'))
+            # if step%5==0:
+            #     image1 = model.decode_latent(nvs_latent_a).detach()[0]
+            #     image2 = model.decode_latent(nvs_latent_b).detach()[0]
+            #     print(f"[INFO] image1: {image1.shape}")
+            #     Image.fromarray((image1.permute(1,2,0).cpu().numpy() * 255).astype(np.uint8)).save(f'{exp_dir}/decode_img1_{step}.png')
+            #     Image.fromarray((image2.permute(1,2,0).cpu().numpy() * 255).astype(np.uint8)).save(f'{exp_dir}/decode_img2_{step}.png')
+
+            # score, mask, score_map,_ = met3r_eval(
+            #     images=inputs, 
+            #     return_overlap_mask=True, # Default 
+            #     return_score_map=True, # Default 
+            #     return_projections=True # Default 
+            # )
+            # loss += torch.nn.functional.mse_loss(nvs_latent_b, noise, reduction='mean')
+            # loss = inconsistency(nvs_latent_a, nvs_latent_b) # l2 or met3r
+            loss = 0.2* consist_loss + noise_pred_loss
+            pbar.set_description(f"step: {step}, loss: {loss.item():.6f}")
             loss.backward()
 
             optimizer.step()
-            scheduler.step(loss)
+            scheduler.step()
 
     model.save_lora(lora_ckpt_fp)
     model.remove_lora()

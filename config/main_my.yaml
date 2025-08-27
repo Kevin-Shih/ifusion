@@ -23,7 +23,7 @@ data:
   demo_fp:  ${data.exp_dir}/demo.png
 
 model:
-  name: zero123
+  name: zero123adv
   args:
     pretrained_model_name_or_path: ldm/ckpt/zero123-xl.ckpt
     pretrained_config: ldm/ckpt/sd-objaverse-finetune-c_concat-256.yaml
@@ -31,7 +31,7 @@ model:
 
 pose:
   image_dir: ${data.image_dir}
-  transform_fp: ${data.transform_fp}
+  transform_fp: ${data.gt_transform_fp}
   demo_fp: ${data.demo_fp}
   id: ${data.id}
   init_latlon: [[0, 0, 1], [0, 90, 1], [0, 180, 1], [0, -90, 1]]
@@ -58,25 +58,25 @@ pose:
 
 finetune:
   image_dir: ${data.image_dir}
+  exp_dir: ${data.exp_dir}
   transform_fp: ${data.transform_fp}
   lora_ckpt_fp: ${data.lora_ckpt_fp}
-  lora_rank: 16
+  lora_rank: 12
   lora_target_replace_module: [CrossAttention, GEGLU]
 
   args:
-    max_step: 3000
-    batch_size: 16
+    max_step: 50
+    batch_size: 4
     optimizer:
       name: Adam
       args:
         lr: 1.0e-3
         betas: [0.9, 0.999]
     scheduler:
-      name: ReduceLROnPlateau
+      name: MultiStepLR
       args:
-        mode: min
-        factor: 0.7
-        patience: 20
+        milestones: [25]
+        gamma: 0.1
 
 inference:
   image_dir: ${data.image_dir}
@@ -93,4 +93,4 @@ inference:
   radius: null
 
   args:
-    batch_size: 12
+    batch_size: 8
