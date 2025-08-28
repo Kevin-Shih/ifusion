@@ -342,7 +342,8 @@ def inference(
     if lora_ckpt_fp:
         model.remove_lora()
 
-    # out = rearrange(out, "b c h w -> 1 c h (b w)")
+    plot_image(out, fp=demo_fp)
+    out = rearrange(out, "b c h w -> c h (b w)")
     plot_image(out, fp=demo_fp)
     print(f"[INFO] Saved image to {demo_fp}")
 

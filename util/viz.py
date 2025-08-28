@@ -32,8 +32,6 @@ def plot_image(*xs, normalize=False, fp="out.png"):
 
     for x in xs:
         if len(x.shape) == 4:
-            for i in range(x.shape[0]):
-                _plot_image(x[i])
             fp = fp.replace(".png", "_0.png")
             for i in range(x.shape[0]):
                 _plot_image(x[i])

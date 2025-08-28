@@ -76,10 +76,10 @@ def eval_pose(transform_fp, gt_transform_fp, image_dir, exp_dir, id, **kwargs):
 
 def eval_nvs(demo_fp, test_image_dir, test_transform_fp, **kwargs)->tuple[float,float,float]:
     pred = load_image(demo_fp, resize=False, to_clip=False)
-    print(f'[INFO 1] Loaded demo image {demo_fp} with shape {pred.shape}')
+    #print(f'[INFO 1] Loaded demo image {demo_fp} with shape {pred.shape}')
+    # print(f'[INFO 2] chunked demo image shape {torch.chunk(pred, 8, dim=-1)[0].shape}')
     pred = torch.cat(torch.chunk(pred, 8, dim=-1))
-    print(f'[INFO 2] chunked demo image shape {torch.chunk(pred, 8, dim=-1).shape}')
-    print(f'[INFO 3] chunk and cat demo image shape {pred.shape}')
+    # print(f'[INFO 3] chunk and cat demo image shape {pred.shape}')
     gt = load_frames(test_image_dir, test_transform_fp, to_clip=False)[0]
     gt = gt.to(pred.device)
 
