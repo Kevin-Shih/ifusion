@@ -82,7 +82,7 @@ def main(config, mode, gpu_ids):
         entity="kevin-shih",
         project="iFusion-Adv",
         group= f'{config.log.group_name}',
-        name= f'{config.log.run_name}_{mday:02d}_{hours:02d}-{mins:04.1f}',
+        name= f'{config.log.run_name}',
         settings=wandb.Settings(x_disable_stats=True, x_save_requirements=False),
         config={
                 "start_date": f'{mon:02d}-{mday:02d}',

@@ -135,7 +135,7 @@ def eval_consistency_all(config, scenes, ids, wb_run):
     # for scene, id in zip(scenes, ids):
     for scene in scenes:
         for id in ids:
-            print(f"[INFO] Evaluating consistency {scene}:{id}")
+            print(f"[INFO] Evaluating consistency \'{scene}\':{id}")
             config.data.scene = scene
             config.data.id = id
             consistency_score = eval_consistency(met3r_eval, **config.data)
@@ -163,7 +163,7 @@ def eval_nvs_all(config, scenes, ids, wb_run):
     # for scene, id in zip(scenes, ids):
     for scene in scenes:
         for id in ids:
-            print(f"[INFO] Evaluating nvs {scene}:{id}")
+            print(f"[INFO] Evaluating nvs \'{scene}\':{id}")
             config.data.scene = scene
             config.data.id = id
             metric.append(eval_nvs(**config.data))

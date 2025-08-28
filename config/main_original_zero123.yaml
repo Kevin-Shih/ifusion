@@ -1,5 +1,10 @@
 seed: 42
 
+log:
+  group_name: 'my_subset'
+  run_name: 'Finetune_dualway_zero123'
+  run_path: 
+
 data:
   name: GSO # OO3D
   root_dir: rendering

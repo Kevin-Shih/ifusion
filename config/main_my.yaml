@@ -1,5 +1,10 @@
 seed: 42
 
+log:
+  group_name: 'my_subset'
+  run_name: 'Finetune_dualway_myfinetune'
+  run_path: 
+
 data:
   name: GSO # OO3D
   root_dir: rendering
@@ -15,7 +20,7 @@ data:
   test_image_dir: ${data.root_dir}/${data.name}/${data.scene}/test/rgb
   test_transform_fp: ${data.root_dir}/${data.name}/${data.scene}/test/transform.json
 
-  # experiment
+  # exp
   exp_root_dir: exp
   exp_dir: ${data.exp_root_dir}/${data.name}/${data.scene}/${data.id}
   transform_fp: ${data.exp_dir}/transform.json
