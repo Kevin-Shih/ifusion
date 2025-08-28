@@ -199,17 +199,20 @@ def main(config, mode):
         wb_run = None
     elif config.log.run_path:
         print(f'[INFO] Resuming wandb run from \'{config.log.run_path}\'. Ignoring group_name and run_name arguments.')
-        wb_run = wandb.init(
-            dir="../wandb/eval",
-            entity="kevin-shih",
-            project="iFusion-Adv",
-            id=f"{config.log.run_path.split('/')[-1]}",
-            resume="must",
-        )
-        if config.log.run_name and wb_run.name != config.log.run_name:
-            print(f'[ERROR] run_name argument \'{config.log.run_name}\' does not match the name of the resumed run \'{wb_run.name}\'. Aborting.')
-            wb_run.finish(exit_code=-1)
-            exit(-1)
+        wb_run = wandb.Api().run(f'kevin-shih/iFusion-Adv/{config.log.run_path.split("/")[-1]}')
+        print(f'Confirm Resuming from \'{wb_run.name}\', id:\'{wb_run.id}\'? [Y/N]')
+        user_input = input()
+        if user_input.lower() in ('y', 'yes'):
+            wb_run = wandb.init(
+                dir="../wandb/eval",
+                entity="kevin-shih",
+                project="iFusion-Adv",
+                id=f"{config.log.run_path.split('/')[-1]}",
+                resume="must",
+            )
+        else:
+            print(f'Canceled: Abort execution.')
+            exit(0)
     else:
         wb_run = wandb.init(
             dir="./wandb/eval",
