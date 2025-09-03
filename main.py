@@ -77,25 +77,52 @@ def main(config, mode, gpu_ids):
     curr_time = time.localtime(time.time())
     mon, mday, hours = curr_time.tm_mon, curr_time.tm_mday, curr_time.tm_hour
     mins = curr_time.tm_min + curr_time.tm_sec / 60
-    wb_run = wandb.init(
-        dir="./wandb/finetune",
-        entity="kevin-shih",
-        project="iFusion-Adv",
-        group= f'{config.log.group_name}',
-        name= f'{config.log.run_name}',
-        settings=wandb.Settings(x_disable_stats=True, x_save_requirements=False),
-        config={
-                "start_date": f'{mon:02d}-{mday:02d}',
-                "start_time": f'{hours:02d}-{mins:04.1f}',
-                'mode':{
-                    'pose':  mode[0],
-                    'zero123_nvs':  mode[1] and config.finetune is None,
-                    'iFusion_finetune':  mode[1] and config.finetune is not None,
-                    'my_finetune':  mode[2],
-                },
-                **conf_dict,
-        },
-    )
+    if config.log.run_path:
+        print(f'[INFO] Resuming wandb run from \'{config.log.run_path}\'. Ignoring group_name and run_name arguments.')
+        wb_run = wandb.Api().run(f'kevin-shih/iFusion-Adv/{config.log.run_path.split("/")[-1]}')
+        print(f'Confirm Resuming from \'{wb_run.name}\', id:\'{wb_run.id}\'? [Y/N]')
+        user_input = input()
+        if user_input.lower() in ('y', 'yes'):
+            wb_run = wandb.init(
+                dir="../wandb/eval",
+                entity="kevin-shih",
+                project="iFusion-Adv",
+                id=f"{config.log.run_path.split('/')[-1]}",
+                resume="must",
+                settings=wandb.Settings(x_disable_stats=True, x_save_requirements=False),
+                # config={
+                #     'mode':{
+                #         'pose':  mode[0],
+                #         'zero123_nvs':  mode[1] and config.finetune is None,
+                #         'iFusion_finetune':  mode[1] and config.finetune is not None,
+                #         'my_finetune':  mode[2],
+                #     },
+                #     **conf_dict,
+                # },
+            )
+        else:
+            print(f'Canceled: Abort execution.')
+            exit(0)
+    else:
+        wb_run = wandb.init(
+            dir="./wandb/finetune",
+            entity="kevin-shih",
+            project="iFusion-Adv",
+            group= f'{config.log.group_name}',
+            name= f'{config.log.run_name}',
+            settings=wandb.Settings(x_disable_stats=True, x_save_requirements=False),
+            config={
+                    "start_date": f'{mon:02d}-{mday:02d}',
+                    "start_time": f'{hours:02d}-{mins:04.1f}',
+                    'mode':{
+                        'pose':  mode[0],
+                        'zero123_nvs':  mode[1] and config.finetune is None,
+                        'iFusion_finetune':  mode[1] and config.finetune is not None,
+                        'my_finetune':  mode[2],
+                    },
+                    **conf_dict,
+            },
+        )
 
     # split scenes and multi-process
     scenes = split_list(scenes, len(gpu_ids))

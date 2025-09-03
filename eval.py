@@ -235,7 +235,8 @@ def main(config, mode):
         eval_nvs_all(config, scenes, ids=ids, wb_run=wb_run)
     if mode[2]:
         eval_consistency_all(config, scenes, ids=ids, wb_run=wb_run)
-    wb_run.finish()
+    if wb_run:
+        wb_run.finish()
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

@@ -3,7 +3,7 @@ seed: 42
 log:
   group_name: 'my_subset'
   run_name: 'Finetune_dualway_zero123'
-  run_path: 8z4emdec
+  run_path: kevin-shih/iFusion-Adv/rudmlfzg
 
 data:
   name: GSO # OO3D
