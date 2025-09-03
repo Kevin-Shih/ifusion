@@ -227,9 +227,9 @@ def main(config, mode):
                     **conf_dict,
             },
         )
-    perm = list(itertools.combinations(range(5), 2))
+    perm = list(itertools.permutations(range(5), 2))
     ids = [",".join(map(str, p)) for p in perm]
-    scenes = sorted(os.listdir(f"{config.data.root_dir}/{config.data.name}"))[0:5]
+    scenes = sorted(os.listdir(f"{config.data.root_dir}/{config.data.name}"))[0:]
     print(f"[INFO] Found {len(scenes)} scenes: {scenes}")
     if mode[0]:
         eval_pose_all(config, scenes, ids=ids, wb_run=wb_run)
