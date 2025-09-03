@@ -16,7 +16,7 @@ from util.util import load_image, parse_optimizer, parse_scheduler, str2list
 from util.viz import plot_image
 from PIL import Image
 
-def optimize_pose_loop(
+def dualway_optimize_pose_loop(
     model,
     image_cond: Float[Tensor, "2 3 256 256"],
     image_target: Float[Tensor, "2 3 256 256"],
@@ -97,6 +97,66 @@ def optimize_pose_loop(
 
     return total_loss, theta, azimuth, distance
 
+def original_optimize_pose_loop(
+    model,
+    image_cond: Float[Tensor, "2 3 256 256"],
+    image_target: Float[Tensor, "2 3 256 256"],
+    T: Float[Tensor, "4 4"],
+    default_radius: float,
+    search_radius_range: float,
+    use_step_ratio: bool,
+    args,
+    **kwargs,
+):
+    # init xi in se(3)
+    xi = torch.randn(6) * 1e-6
+    xi.requires_grad_()
+    optimizer = parse_optimizer(args.optimizer, [xi])
+    scheduler = parse_scheduler(args.scheduler, optimizer)
+
+    total_loss = 0.0
+    with trange(args.max_step) as pbar:
+        for step in pbar:
+            optimizer.zero_grad()
+
+            # se(3) -> SE(3)
+            T_delta = SE3.exp(xi).as_matrix()
+            T_ = T @ T_delta
+
+            latlon = mat2latlon(T_).squeeze()
+            theta, azimuth = latlon[0], latlon[1]
+            distance = (
+                torch.sin(torch.norm(T_[:3, 3]) - default_radius) * search_radius_range
+            )
+
+            idx = [0, 1] if torch.rand(1) < 0.5 else [1, 0]
+            batch = {
+                "image_cond": image_cond[idx],
+                "image_target": image_target[idx],
+                "T": torch.stack(
+                    (
+                        make_T(theta, azimuth, distance),
+                        make_T(-theta, -azimuth, -distance),
+                    )
+                )[idx].to(model.device),
+            }
+
+            if use_step_ratio:
+                loss = model(batch, step_ratio=step / args.max_step)
+            else:
+                loss = model(batch)
+
+            total_loss += loss
+
+            pbar.set_description(
+                f"step: {step}, total_loss: {total_loss:.4f}, loss: {loss.item():.2f}, theta: {theta.rad2deg().item():.2f}, azimuth: {azimuth.rad2deg().item():.2f}, distance: {distance.item():.2f}"
+            )
+
+            loss.backward()
+            optimizer.step()
+            scheduler.step(total_loss)
+
+    return total_loss, theta, azimuth, distance
 
 def optimize_pose_pair(
     model,
@@ -109,9 +169,15 @@ def optimize_pose_pair(
     image_target = torch.cat((qry_image, ref_image)).to(model.device)
     init_T = latlon2mat(torch.tensor(init_latlon))
     results = []
+    if kwargs.get('use_dualway', False):
+        print("[INFO] Using dual-way optimization")
+        optimize_pose_loop_fn = dualway_optimize_pose_loop
+    else:
+        print("[INFO] Using original optimization")
+        optimize_pose_loop_fn = original_optimize_pose_loop
 
     for T in init_T:
-        total_loss, theta, azimuth, distance = optimize_pose_loop(
+        total_loss, theta, azimuth, distance = optimize_pose_loop_fn(
             model,
             image_cond=image_cond,
             image_target=image_target,

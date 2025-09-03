@@ -47,17 +47,23 @@ def eval_consistency(met3r_eval, exp_dir, id, **kwargs):
     # Prepare inputs of shape (batch, views, channels, height, width): views must be 2
     # RGB range must be in [-1, 1]
     # print(f'img shape:{len(img)},{img[0].shape}') 2, 3, 256, 256
-    imgs = []
-    for i in range(8):
-        fp = os.path.join(exp_dir, f'demo_{i}.png')
-        # print(f'[INFO] Load demo image {fp}')
-        imgs.append(load_image(fp,verbose=False))
-    imgs = torch.cat(imgs)
-    inputs = []
-    # print(f'imgs lens : {imgs.shape[0] - 1}')
-    for i in range(imgs.shape[0] - 1):
-        inputs.append(torch.Tensor(imgs[i : i + 2]))
-    inputs= torch.stack(inputs).cuda()
+    # imgs = []
+    # for fp in os.listdir(exp_dir):
+    #     if 'demo_' in fp:
+    #         imgs.append(load_image(os.path.join(exp_dir, fp),verbose=False))
+    # imgs = torch.cat(imgs)
+    # inputs = []
+    # # print(f'imgs lens : {imgs.shape[0] - 1}')
+    # for i in range(imgs.shape[0] - 1):
+    #     inputs.append(torch.Tensor(imgs[i : i + 2]))
+    # inputs= torch.stack(inputs).cuda()
+    fp_a = '/eva_data0/kevinshih/zero123-adv/ifusion/exp_dualway_ifusion/GSO/3D_Dollhouse_Sofa/0,4/demo_1.png'
+    fp_b = '/eva_data0/kevinshih/zero123-adv/ifusion/exp_dualway_ifusion/GSO/3D_Dollhouse_Sofa/0,4/demo_2.png'
+    a = load_image(fp_a,verbose=False)
+    b = load_image(fp_b,verbose=False)
+    print(f"Image A: {fp_a}\nImage B: {fp_b}")
+    inputs = torch.cat((a, b)).cuda().unsqueeze(0)
+    # inputs = torch.randn((8, 2, 3, 256, 256)).cuda()
     inputs = inputs.clip(-1, 1)
     score, mask, score_map, pcloud = met3r_eval(
         images=inputs, 
@@ -67,24 +73,31 @@ def eval_consistency(met3r_eval, exp_dir, id, **kwargs):
         return_point_clouds = True
     )
     # pcloud : (B-1) * 2 point clouds. Each image pair has 2 point clouds (left and right)
+    # mask = mask.cpu()
+    # score_map = score_map.cpu()
+    # Image.fromarray(((inputs[0, 0].permute(1, 2, 0) +1).cpu().numpy() / 2 * 255).astype(np.uint8)).save(f'{exp_dir}/input_{id[0]}.png')
+    # Image.fromarray(((inputs[0, 1].permute(1, 2, 0) +1).cpu().numpy() / 2 * 255).astype(np.uint8)).save(f'{exp_dir}/input_{id[2]}.png')
     # print(f'score map range : {score_map[0].min()} to {score_map[0].max()}')
     # print(f'mask range : {mask[0].min()} to {mask[0].max()}')
+    # from pytorch3d.io import IO
     from pytorch3d import io
+    # from pytorch3d.structures import Pointclouds
+    temp = torch.stack([score_map[0], score_map[0], score_map[0]], axis=-1).clamp(0,1) *  torch.stack([mask[0]+0.3, mask[0]+0.3, torch.full_like(mask[0], 0.8)], axis=-1).clamp(0,1)
+    Image.fromarray((score_map[0].clamp(0,1).cpu().numpy() * 255).astype(np.uint8)).save(f'{exp_dir}/score_map_1,2.png')
+    Image.fromarray((temp * 255).cpu().numpy().astype(np.uint8)).save(f'{exp_dir}/score_map_masked_1,2.png')
+    Image.fromarray((mask[0].clamp(0,1).cpu().numpy() * 255).astype(np.uint8)).save(f'{exp_dir}/mask_1,2.png')
+    # Image.fromarray(((projections[i].cpu().numpy() +1) / 2 * 255).astype(np.uint8)).save(f'{exp_dir}/projections_{i},{i+1}.png')
+    # print(f'verts:{pcloud.points_list()[0].shape}, feats:{pcloud.features_list()[0].shape}')
     if met3r_eval.distance == 'cosine':
+        # no colors is met3r choose cosine distance as metric
         print(f'[INFO] Save pointclouds without color')
-    for i in range(score_map.shape[0]):
-        Image.fromarray((score_map[i].clamp(0,1).cpu().numpy() * 255).astype(np.uint8)).save(f'{exp_dir}/score_map_{i},{i+1}.png')
-        temp = torch.stack([score_map[i], score_map[i], score_map[i]], axis=-1).clamp(0,1) * torch.stack([mask[i]+0.3, mask[i]+0.3, torch.full_like(mask[i], 1)], axis=-1).clamp(0,1)
-        
-        Image.fromarray((temp * 255).cpu().numpy().astype(np.uint8)).save(f'{exp_dir}/score_map_masked_{i},{i+1}.png')
-        Image.fromarray((mask[i].clamp(0,1).cpu().numpy() * 255).astype(np.uint8)).save(f'{exp_dir}/mask_{i},{i+1}.png')
-        if met3r_eval.distance == 'cosine':
-            # no colors is met3r choose cosine distance as metric
-            io.save_ply(f'{exp_dir}/pointcloud_{i},{i+1}_l.ply', pcloud.points_list()[i*2])
-            io.save_ply(f'{exp_dir}/pointcloud_{i},{i+1}_r.ply', pcloud.points_list()[i*2+1])
-        else:
-            io.IO().save_pointcloud(pcloud[i*2], f'{exp_dir}/pointcloud_{i},{i+1}_l.ply')
-            io.IO().save_pointcloud(pcloud[i*2+1], f'{exp_dir}/pointcloud_{i},{i+1}_r.ply')
+        io.save_ply(f'{exp_dir}/pointcloud_1,2_l.ply', pcloud.points_list()[0])
+        io.save_ply(f'{exp_dir}/pointcloud_1,2_r.ply', pcloud.points_list()[1])
+    else:
+        # temp = Pointclouds(points=[pcloud.points_list()[i*2]], features=[(pcloud.features_list()[i*2]*255).clamp(0,255).to(torch.uint8)])
+        # io.IO().save_pointcloud(temp, f'{exp_dir}/pointcloud_{i},{i+1}_l.ply')
+        io.IO().save_pointcloud(pcloud[0], f'{exp_dir}/pointcloud_1,2_l.ply')
+        io.IO().save_pointcloud(pcloud[1], f'{exp_dir}/pointcloud_1,2_r.ply')
             
     np.set_printoptions(precision=3, suppress=None, floatmode='fixed')
     print(f'consistency score: {score.cpu().numpy()}')
@@ -154,23 +167,23 @@ def eval_nvs_all(config, scenes, ids, wb_run):
         wb_run.summary['NVS/SSIM  (mean)']   = SSIM_mean
         wb_run.summary['NVS/LPIPS (mean)']   = LPIPS_mean
     print(
-        f"PSNR: {metric[:, 0].mean():.3f}, SSIM: {metric[:, 1].mean():.3f}, LPIPS: {metric[:, 2].mean():.3f}"
+        f"PSNR: {metric[:, 0].mean()}, SSIM: {metric[:, 1].mean()}, LPIPS: {metric[:, 2].mean()}"
     )
 
 def eval_consistency_all(config, scenes, ids, wb_run):
     met3r_eval = MEt3R(
         img_size=256, # Default to 256, set to `None` to use the input resolution on the fly!
         use_norm=True, # Default to True 
-        backbone="mast3r", # Default to MASt3R, select from ["mast3r", "dust3r", "raft"]
+        backbone="dust3r", # Default to MASt3R, select from ["mast3r", "dust3r", "raft"]
         feature_backbone="dino16", # Default to DINO, select from ["dino16", "dinov2", "maskclip", "vit", "clip", "resnet50"]
         feature_backbone_weights="mhamilton723/FeatUp", # Default
         upsampler="featup", # Default to FeatUP upsampling, select from ["featup", "nearest", "bilinear", "bicubic"]
-        distance="cosine", # Default to feature similarity, select from ["cosine", "lpips", "rmse", "psnr", "mse", "ssim"]
+        distance="mse", # Default to feature similarity, select from ["cosine", "lpips", "rmse", "psnr", "mse", "ssim"]
         freeze=True, # Default to True
     ).cuda()
     consistency_metric = []
-    scenes = [scenes[0], scenes[2]]
-    ids = [ids[0], ids[3]]
+    scenes = [scenes[2]]
+    ids = [ids[3]]
     for scene, id in zip(scenes, ids):
     # for scene in scenes:
         # for id in ids:
@@ -227,9 +240,9 @@ def main(config, mode):
                     **conf_dict,
             },
         )
-    perm = list(itertools.combinations(range(5), 2))
+    perm = list(itertools.permutations(range(5), 2))
     ids = [",".join(map(str, p)) for p in perm]
-    scenes = sorted(os.listdir(f"{config.data.root_dir}/{config.data.name}"))[0:5]
+    scenes = sorted(os.listdir(f"{config.data.root_dir}/{config.data.name}"))[0:]
     print(f"[INFO] Found {len(scenes)} scenes: {scenes}")
     if mode[0]:
         eval_pose_all(config, scenes, ids=ids, wb_run=wb_run)

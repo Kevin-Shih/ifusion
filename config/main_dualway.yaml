@@ -1,8 +1,10 @@
 seed: 42
 
 log:
-  # group_name: 'my_subset'
-  # run_name: 'Finetune_dualway_myfinetune'
+  # group_name: 'scene0_all'
+  # # group_name: 'scene0,2_id0,3'
+  # # group_name: 'my_subset'
+  # run_name: 'Eval_dualway_iFusion_mast3r'
   # run_path: 
 
 data:
@@ -28,7 +30,7 @@ data:
   demo_fp:  ${data.exp_dir}/demo.png
 
 model:
-  name: zero123adv
+  name: zero123
   args:
     pretrained_model_name_or_path: ldm/ckpt/zero123-xl.ckpt
     pretrained_config: ldm/ckpt/sd-objaverse-finetune-c_concat-256.yaml
@@ -36,7 +38,7 @@ model:
 
 pose:
   image_dir: ${data.image_dir}
-  transform_fp: ${data.gt_transform_fp}
+  transform_fp: ${data.transform_fp}
   demo_fp: ${data.demo_fp}
   id: ${data.id}
   init_latlon: [[0, 0, 1], [0, 90, 1], [0, 180, 1], [0, -90, 1]]
@@ -64,15 +66,14 @@ pose:
 
 finetune:
   image_dir: ${data.image_dir}
-  exp_dir: ${data.exp_dir}
   transform_fp: ${data.transform_fp}
   lora_ckpt_fp: ${data.lora_ckpt_fp}
   lora_rank: 12
   lora_target_replace_module: [CrossAttention, GEGLU]
 
   args:
-    max_step: 50
-    batch_size: 4
+    max_step: 30
+    batch_size: 16
     optimizer:
       name: Adam
       args:

@@ -69,10 +69,10 @@ def main(config, mode, gpu_ids):
             gen_nvs_my_finetune(model, config, scenes, ids)
     config, conf_dict = config
 
-    perm = list(itertools.combinations(range(3), 2))
+    perm = list(itertools.permutations(range(5), 2))
     ids = [",".join(map(str, p)) for p in perm]
     gpu_ids = str2list(gpu_ids)
-    scenes = sorted(os.listdir(f"{config.data.root_dir}/{config.data.name}"))[0:5]
+    scenes = sorted(os.listdir(f"{config.data.root_dir}/{config.data.name}"))[0:]
 
     curr_time = time.localtime(time.time())
     mon, mday, hours = curr_time.tm_mon, curr_time.tm_mday, curr_time.tm_hour
@@ -90,15 +90,15 @@ def main(config, mode, gpu_ids):
                 id=f"{config.log.run_path.split('/')[-1]}",
                 resume="must",
                 settings=wandb.Settings(x_disable_stats=True, x_save_requirements=False),
-                # config={
-                #     'mode':{
-                #         'pose':  mode[0],
-                #         'zero123_nvs':  mode[1] and config.finetune is None,
-                #         'iFusion_finetune':  mode[1] and config.finetune is not None,
-                #         'my_finetune':  mode[2],
-                #     },
-                #     **conf_dict,
-                # },
+                config={
+                    'mode':{
+                        'pose':  wb_run.config.mode.pose or mode[0],
+                        'zero123_nvs':  wb_run.config.mode.zero123_nvs or (mode[1] and config.finetune is None),
+                        'iFusion_finetune': wb_run.config.mode.iFusion_finetune or (mode[1] and config.finetune is not None),
+                        'my_finetune': wb_run.config.mode.my_finetune or mode[2],
+                    },
+                    **conf_dict,
+                },
             )
         else:
             print(f'Canceled: Abort execution.')

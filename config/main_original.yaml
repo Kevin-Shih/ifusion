@@ -1,9 +1,9 @@
 seed: 42
 
 log:
-  # group_name: 'my_subset'
-  # run_name: 'Finetune_dualway_iFusion'
-  # run_path: kevin-shih/iFusion-Adv/dslbhlh0
+  group_name: 'all'
+  run_name: 'Finetune_original_iFusion_ALL'
+  run_path: kevin-shih/iFusion-Adv/kjljxrhr
 
 data:
   name: GSO # OO3D
@@ -46,6 +46,7 @@ pose:
   default_latlon: ['${pose.default_theta}', '${pose.default_azimuth}', '${pose.default_radius}']
   search_radius_range: 0.8
   use_step_ratio: true
+  use_dualway: false
 
   args:
     max_step: 100
