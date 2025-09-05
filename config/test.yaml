@@ -1,11 +1,6 @@
 seed: 42
 
 log:
-  group_name: 'scene0_all'
-  # group_name: 'scene0,2_id0,3'
-  # group_name: 'my_subset'
-  run_name: 'Finetune_dualway_iFusion_ALL'
-  run_path: kevin-shih/iFusion-Adv/sr0j24yc
 
 data:
   name: GSO # OO3D
@@ -26,8 +21,13 @@ data:
   exp_root_dir: exp
   exp_dir: ${data.exp_root_dir}/${data.name}/${data.scene}/${data.id}
   transform_fp: ${data.exp_dir}/transform.json
-  lora_ckpt_fp: ${data.exp_dir}/lora.ckpt
-  demo_fp:  ${data.exp_dir}/demo.png
+  scene_transform_fp: ${data.exp_root_dir}/${data.name}/${data.scene}/transform.json
+
+  # nvs exp
+  nvs_root_dir: ${data.exp_root_dir}
+  nvs_dir: ${data.nvs_root_dir}/${data.name}/${data.scene}/${data.id}
+  lora_ckpt_fp: ${data.nvs_dir}/lora.ckpt
+  demo_fp:  ${data.nvs_dir}/demo.png
 
 model:
   name: zero123
@@ -39,6 +39,7 @@ model:
 pose:
   image_dir: ${data.image_dir}
   transform_fp: ${data.transform_fp}
+  scene_transform_fp: ${data.scene_transform_fp}
   demo_fp: ${data.demo_fp}
   id: ${data.id}
   init_latlon: [[0, 0, 1], [0, 90, 1], [0, 180, 1], [0, -90, 1]]

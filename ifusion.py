@@ -34,7 +34,7 @@ def dualway_optimize_pose_loop(
     scheduler = parse_scheduler(args.scheduler, optimizer)
 
     total_loss = 0.0
-    with trange(args.max_step) as pbar:
+    with trange(args.max_step,ncols=140) as pbar:
         for step in pbar:
             optimizer.zero_grad()
 
@@ -89,7 +89,7 @@ def dualway_optimize_pose_loop(
             total_loss = total_loss + inv_loss
 
             pbar.set_description(
-                f"step: {step+1}, lr: {scheduler.get_last_lr()[0]:.4f}, total_loss: {total_loss:.4f}, loss: {loss.item():.2f}, theta: {theta.rad2deg().item():.2f}, azimuth: {azimuth.rad2deg().item():.2f}, distance: {distance.item():.2f}"
+                f"lr: {scheduler.get_last_lr()[0]:.3f}, total_loss: {total_loss:.3f}, loss: {loss.item():.2f}, theta: {theta.rad2deg().item():.2f}, azimuth: {azimuth.rad2deg().item():.2f}, distance: {distance.item():.2f}"
             )
             (loss+inv_loss).backward()
             optimizer.step()
@@ -197,15 +197,17 @@ def optimize_pose_pair(
     results = torch.tensor(results)
     best_idx = torch.argmin(results[:, 0])
     pred_pose = results[best_idx][1:]
+    pred_loss = results[best_idx][0]
     print(
         f"[INFO] Best pose: theta: {pred_pose[0]:.2f}, azimuth: {pred_pose[1]:.2f}, distance: {pred_pose[2]:.2f}"
     )
 
-    return pred_pose
+    return pred_pose, pred_loss.item()
 
 
 def optimize_pose(
     model,
+    transform_dict: Dict,
     image_dir: str,
     transform_fp: str,
     demo_fp: str,
@@ -228,24 +230,51 @@ def optimize_pose(
             "latlon": list(default_latlon),
         }
     )
-    for qry_fp, qry_image in zip(image_fps[1:], qry_images):
+    if len(transform_dict["frames"]) == 0:
+        transform_dict["frames"].append(
+        {
+            "file_path": image_fps[0].replace(image_dir + "/", ""),
+            "transform_matrix": latlon2mat(torch.tensor([default_latlon])).squeeze(0).tolist(),
+            "latlon": list(default_latlon),
+            "loss": 0.0,
+        }
+    )
+    for qry_idx, qry_image in zip(id[1:], qry_images):
         assert ref_image.shape == qry_image.shape
-        pose = optimize_pose_pair(
+        pose, loss = optimize_pose_pair(
             model=model, ref_image=ref_image, qry_image=qry_image, **kwargs
         )
         pose = np.add(default_latlon, pose.unsqueeze(0))
         out_dict["frames"].append(
             {
-                "file_path": qry_fp.replace(image_dir + "/", ""),
+                "file_path": image_fps[qry_idx].replace(image_dir + "/", ""),
                 "transform_matrix": latlon2mat(pose.clone()).squeeze(0).tolist(),
                 "latlon": pose.squeeze().tolist(),
             }
         )
+        if qry_idx < len(transform_dict["frames"]) :
+            if transform_dict["frames"][qry_idx]["loss"] > loss:
+                transform_dict["frames"][qry_idx] = {
+                    "file_path": image_fps[qry_idx].replace(image_dir + "/", ""),
+                    "transform_matrix": latlon2mat(pose.clone()).squeeze(0).tolist(),
+                    "latlon": pose.squeeze().tolist(),
+                    "loss": loss,
+                }
+        else:
+            transform_dict["frames"].append(
+                {
+                    "file_path": image_fps[qry_idx].replace(image_dir + "/", ""),
+                    "transform_matrix": latlon2mat(pose.clone()).squeeze(0).tolist(),
+                    "latlon": pose.squeeze().tolist(),
+                    "loss": loss,
+                }
+            )
 
     # save poses to json
     os.makedirs(os.path.dirname(transform_fp), exist_ok=True)
     with open(transform_fp, "w") as f:
         json.dump(out_dict, f, indent=4)
+    return transform_dict
 
 
 def finetune(
@@ -268,7 +297,7 @@ def finetune(
     scheduler = parse_scheduler(args.scheduler, optimizer)
 
     train_loader = iter(train_loader)
-    with trange(args.max_step) as pbar:
+    with trange(args.max_step, ncols=140) as pbar:
         for step in pbar:
             optimizer.zero_grad()
 
@@ -284,8 +313,6 @@ def finetune(
 
     model.save_lora(lora_ckpt_fp)
     model.remove_lora()
-
-
 
 def my_finetune(
     model,
@@ -316,19 +343,19 @@ def my_finetune(
     optimizer = parse_optimizer(args.optimizer, model.require_grad_params)
     scheduler = parse_scheduler(args.scheduler, optimizer)
     
-    from met3r import MEt3R
-    met3r_eval = MEt3R(
-        img_size=256, # Default to 256, set to `None` to use the input resolution on the fly!
-        use_norm=True, # Default to True 
-        backbone="mast3r", # Default to MASt3R, select from ["mast3r", "dust3r", "raft"]
-        feature_backbone="dino16", # Default to DINO, select from ["dino16", "dinov2", "maskclip", "vit", "clip", "resnet50"]
-        feature_backbone_weights="mhamilton723/FeatUp", # Default
-        upsampler="featup", # Default to FeatUP upsampling, select from ["featup", "nearest", "bilinear", "bicubic"]
-        distance="cosine", # Default to feature similarity, select from ["cosine", "lpips", "rmse", "psnr", "mse", "ssim"]
-        freeze=True, # Default to True
-    ).cuda()
+    # from met3r import MEt3R
+    # met3r_eval = MEt3R(
+    #     img_size=256, # Default to 256, set to `None` to use the input resolution on the fly!
+    #     use_norm=True, # Default to True 
+    #     backbone="mast3r", # Default to MASt3R, select from ["mast3r", "dust3r", "raft"]
+    #     feature_backbone="dino16", # Default to DINO, select from ["dino16", "dinov2", "maskclip", "vit", "clip", "resnet50"]
+    #     feature_backbone_weights="mhamilton723/FeatUp", # Default
+    #     upsampler="featup", # Default to FeatUP upsampling, select from ["featup", "nearest", "bilinear", "bicubic"]
+    #     distance="cosine", # Default to feature similarity, select from ["cosine", "lpips", "rmse", "psnr", "mse", "ssim"]
+    #     freeze=True, # Default to True
+    # ).cuda()
     train_loader = iter(train_loader)
-    with trange(args.max_step) as pbar:
+    with trange(args.max_step, ncols=140) as pbar:
         for step in pbar:
             optimizer.zero_grad()
 
@@ -336,7 +363,8 @@ def my_finetune(
             batch = {k: v.to(model.device) for k, v in batch.items()}
             noise_a, noise_b, noise, nvs_latent_a, nvs_latent_b = model(batch)
             consist_loss = torch.nn.functional.mse_loss(noise_a, noise_b, reduction='mean')
-            noise_pred_loss = 0.5 * (torch.nn.functional.mse_loss(noise_a, noise, reduction='mean') + torch.nn.functional.mse_loss(noise_b, noise, reduction='mean'))
+            noise_pred_loss = torch.nn.functional.mse_loss(noise_a, noise, reduction='mean') + torch.nn.functional.mse_loss(noise_b, noise, reduction='mean')
+            # region      commented      
             # if step%5==0:
             #     image1 = model.decode_latent(nvs_latent_a).detach()[0]
             #     image2 = model.decode_latent(nvs_latent_b).detach()[0]
@@ -352,7 +380,9 @@ def my_finetune(
             # )
             # loss += torch.nn.functional.mse_loss(nvs_latent_b, noise, reduction='mean')
             # loss = inconsistency(nvs_latent_a, nvs_latent_b) # l2 or met3r
-            loss = 0.2* consist_loss + noise_pred_loss
+            # endregion
+
+            loss = 2 * consist_loss + noise_pred_loss
             pbar.set_description(f"step: {step}, loss: {loss.item():.6f}")
             loss.backward()
 

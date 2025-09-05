@@ -4,6 +4,8 @@ import multiprocessing
 import os
 import wandb
 import time
+import json
+import numpy as np
 
 from dataset.base import load_frames
 from ifusion import finetune, inference, optimize_pose, my_finetune
@@ -24,12 +26,16 @@ def set_default_latlon(config):
 
 def gen_pose_all(model, config, scenes, ids):
     for scene in scenes:
+        transform_dict = {"camera_angle_x": np.deg2rad(49.1), "frames": []}
         for id in ids:
             print(f"[INFO] Optimizing pose {scene}:{id}")
             config.data.scene = scene
             config.data.id = id
             set_default_latlon(config)
-            optimize_pose(model, **config.pose)
+            optimize_pose(model, transform_dict, **config.pose)
+        os.makedirs(os.path.dirname(config.pose.scene_transform_fp), exist_ok=True)
+        with open(config.pose.scene_transform_fp, "w") as f:
+            json.dump(transform_dict, f, indent=4)
 
 
 def gen_nvs_all(model, config, scenes, ids):
@@ -48,14 +54,16 @@ def gen_nvs_all(model, config, scenes, ids):
                 inference(model, **config.inference)
 
 def gen_nvs_my_finetune(model, config, scenes, ids):
-    scenes = [scenes[0], scenes[2]]
-    ids = [ids[0], ids[3]]
-    for scene, id in zip(scenes, ids):
-        print(f"[INFO] Fine-tuning {scene}")
-        config.data.scene = scene
-        config.data.id = id
-        my_finetune(model, scenes, ids, **config.finetune)
-        inference(model, **config.inference)
+    # scenes = [scenes[0], scenes[2]]
+    # ids = [ids[0], ids[3]]
+    # for scene, id in zip(scenes, ids):
+    for scene in scenes:
+        for id in ids:
+            print(f"[INFO] Fine-tuning {scene}")
+            config.data.scene = scene
+            config.data.id = id
+            my_finetune(model, scenes, ids, **config.finetune)
+            inference(model, **config.inference)
 
 def main(config, mode, gpu_ids):
     def worker(config, mode, scenes, ids, gpu_id):
@@ -64,20 +72,24 @@ def main(config, mode, gpu_ids):
         if mode[0]:
             gen_pose_all(model, config, scenes, ids)
         if mode[1]:
-            gen_nvs_all(model, config, scenes, ids)
+            gen_nvs_all(model, config, scenes, ids=["0,1"])
         if mode[2]:
-            gen_nvs_my_finetune(model, config, scenes, ids)
+            gen_nvs_my_finetune(model, config, scenes, ids=["0,1"])
     config, conf_dict = config
 
-    perm = list(itertools.permutations(range(5), 2))
+    # perm = list(itertools.permutations(range(5), 2))
+    # perm = list(itertools.combinations(range(5), 2))
+    perm = list(itertools.combinations(range(3), 2))
     ids = [",".join(map(str, p)) for p in perm]
     gpu_ids = str2list(gpu_ids)
-    scenes = sorted(os.listdir(f"{config.data.root_dir}/{config.data.name}"))[0:]
+    scenes = sorted(os.listdir(f"{config.data.root_dir}/{config.data.name}"))[0:5]
 
     curr_time = time.localtime(time.time())
     mon, mday, hours = curr_time.tm_mon, curr_time.tm_mday, curr_time.tm_hour
     mins = curr_time.tm_min + curr_time.tm_sec / 60
-    if config.log.run_path:
+    if config.log is None:
+        wb_run = None
+    elif config.log.run_path:
         print(f'[INFO] Resuming wandb run from \'{config.log.run_path}\'. Ignoring group_name and run_name arguments.')
         wb_run = wandb.Api().run(f'kevin-shih/iFusion-Adv/{config.log.run_path.split("/")[-1]}')
         print(f'Confirm Resuming from \'{wb_run.name}\', id:\'{wb_run.id}\'? [Y/N]')
@@ -134,7 +146,8 @@ def main(config, mode, gpu_ids):
 
     for p in processes:
         p.join()
-    wb_run.finish()
+    if wb_run:
+        wb_run.finish()
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

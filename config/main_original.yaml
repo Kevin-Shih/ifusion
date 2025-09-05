@@ -1,9 +1,11 @@
 seed: 42
 
 log:
-  group_name: 'all'
-  run_name: 'Finetune_original_iFusion_ALL'
-  run_path: kevin-shih/iFusion-Adv/kjljxrhr
+  # group_name: 'all'
+  group_name: 'scene0_all'
+  # group_name: 'my_subset'
+  run_name: 'Eval_original_iFusion_mast3r'
+  run_path: 
 
 data:
   name: GSO # OO3D

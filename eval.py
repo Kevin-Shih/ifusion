@@ -70,8 +70,8 @@ def eval_consistency(met3r_eval, exp_dir, id, **kwargs):
     # print(f'score map range : {score_map[0].min()} to {score_map[0].max()}')
     # print(f'mask range : {mask[0].min()} to {mask[0].max()}')
     from pytorch3d import io
-    if met3r_eval.distance == 'cosine':
-        print(f'[INFO] Save pointclouds without color')
+    # if met3r_eval.distance == 'cosine':
+    #     print(f'[INFO] Save pointclouds without color')
     for i in range(score_map.shape[0]):
         Image.fromarray((score_map[i].clamp(0,1).cpu().numpy() * 255).astype(np.uint8)).save(f'{exp_dir}/score_map_{i},{i+1}.png')
         temp = torch.stack([score_map[i], score_map[i], score_map[i]], axis=-1).clamp(0,1) * torch.stack([mask[i]+0.3, mask[i]+0.3, torch.full_like(mask[i], 1)], axis=-1).clamp(0,1)
@@ -169,11 +169,11 @@ def eval_consistency_all(config, scenes, ids, wb_run):
         freeze=True, # Default to True
     ).cuda()
     consistency_metric = []
-    scenes = [scenes[0], scenes[2]]
-    ids = [ids[0], ids[3]]
-    for scene, id in zip(scenes, ids):
-    # for scene in scenes:
-        # for id in ids:
+    # scenes = [scenes[0], scenes[2]]
+    # ids = [ids[0], ids[3]]
+    # for scene, id in zip(scenes, ids):
+    for scene in scenes:
+        for id in ids:
             print(f"[INFO] Evaluating consistency \'{scene}\':{id}")
             config.data.scene = scene
             config.data.id = id
@@ -227,16 +227,18 @@ def main(config, mode):
                     **conf_dict,
             },
         )
-    perm = list(itertools.permutations(range(5), 2))
+    # perm = list(itertools.permutations(range(5), 2))
+    # perm = list(itertools.combinations(range(5), 2))
+    perm = list(itertools.combinations(range(3), 2))
     ids = [",".join(map(str, p)) for p in perm]
-    scenes = sorted(os.listdir(f"{config.data.root_dir}/{config.data.name}"))[0:]
+    scenes = sorted(os.listdir(f"{config.data.root_dir}/{config.data.name}"))[0:5]
     print(f"[INFO] Found {len(scenes)} scenes: {scenes}")
     if mode[0]:
         eval_pose_all(config, scenes, ids=ids, wb_run=wb_run)
     if mode[1]:
-        eval_nvs_all(config, scenes, ids=ids, wb_run=wb_run)
+        eval_nvs_all(config, scenes, ids=["0,1"], wb_run=wb_run)
     if mode[2]:
-        eval_consistency_all(config, scenes, ids=ids, wb_run=wb_run)
+        eval_consistency_all(config, scenes, ids=["0,1"], wb_run=wb_run)
     if wb_run:
         wb_run.finish()
 

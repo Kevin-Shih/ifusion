@@ -1,9 +1,10 @@
 seed: 42
 
 log:
-  # group_name: 'my_subset'
-  # run_name: 'Finetune_dualway_myfinetune'
-  # run_path: 
+  group_name: 'my_subset'
+  # group_name: 'scene0_all'
+  run_name: 'Dualway_myfinetune_loss2:1'
+  run_path: kevin-shih/iFusion-Adv/etncr8la
 
 data:
   name: GSO # OO3D
@@ -72,7 +73,7 @@ finetune:
 
   args:
     max_step: 50
-    batch_size: 4
+    batch_size: 8
     optimizer:
       name: Adam
       args:
