@@ -70,8 +70,17 @@ class MyFinetuneDataset(Dataset, BaseDataset):
         )
 
 class MyFinetuneIterableDataset(IterableDataset, MyFinetuneDataset):
-    def __init__(self, image_dir, transform_fp):
-        super().__init__(image_dir, transform_fp)
+    def __init__(self,
+                 image_dir,
+                transform_fp: str = None,
+                scene_transform_fp: str = None,
+    ):
+        if scene_transform_fp:
+            print(f"[INFO] Load whole scene from {scene_transform_fp}")
+            self.setup(image_dir, scene_transform_fp)
+        else:
+            print(f"[INFO] Load id[0,1] from {transform_fp}")
+            self.setup(image_dir, transform_fp)
 
     def __iter__(self):
         while True:

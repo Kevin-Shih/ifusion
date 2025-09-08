@@ -1,10 +1,10 @@
 seed: 42
 
 log:
-  # group_name: 'my_subset'
-  # # group_name: 'scene0_all'
-  # run_name: 'Dualway_myfinetune_loss2:1'
-  # run_path:
+  group_name: 'my_subset_perm52'
+  # group_name: 'scene0_all'
+  run_name: 'test'
+  run_path: bkjjqcn9
 
 data:
   name: GSO # OO3D
@@ -22,7 +22,7 @@ data:
   test_transform_fp: ${data.root_dir}/${data.name}/${data.scene}/test/transform.json
 
   # exp
-  exp_root_dir: exp
+  exp_root_dir: exp_test2
   exp_dir: ${data.exp_root_dir}/${data.name}/${data.scene}/${data.id}
   transform_fp: ${data.exp_dir}/transform.json
   scene_transform_fp: ${data.exp_root_dir}/${data.name}/${data.scene}/transform.json
@@ -34,7 +34,7 @@ data:
   demo_fp:  ${data.nvs_dir}/demo.png
 
 model:
-  name: zero123
+  name: zero123adv
   args:
     pretrained_model_name_or_path: ldm/ckpt/zero123-xl.ckpt
     pretrained_config: ldm/ckpt/sd-objaverse-finetune-c_concat-256.yaml
@@ -71,14 +71,16 @@ pose:
 
 finetune:
   image_dir: ${data.image_dir}
-  transform_fp: ${data.transform_fp}
+  exp_dir: ${data.exp_dir}
+  transform_fp: null
+  scene_transform_fp: ${data.scene_transform_fp}
   lora_ckpt_fp: ${data.lora_ckpt_fp}
   lora_rank: 12
   lora_target_replace_module: [CrossAttention, GEGLU]
 
   args:
-    max_step: 30
-    batch_size: 16
+    max_step: 50
+    batch_size: 8
     optimizer:
       name: Adam
       args:
@@ -92,7 +94,8 @@ finetune:
 
 inference:
   image_dir: ${data.image_dir}
-  transform_fp: ${data.transform_fp}
+  transform_fp: null
+  scene_transform_fp: ${data.scene_transform_fp}
   test_transform_fp: ${data.test_transform_fp}
   lora_ckpt_fp: ${data.lora_ckpt_fp}
   demo_fp: ${data.demo_fp}

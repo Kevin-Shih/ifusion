@@ -37,7 +37,8 @@ model:
 
 pose:
   image_dir: ${data.image_dir}
-  transform_fp: ${data.gt_transform_fp}
+  transform_fp: ${data.transform_fp}
+  scene_transform_fp: ${data.scene_transform_fp}
   demo_fp: ${data.demo_fp}
   id: ${data.id}
   init_latlon: [[0, 0, 1], [0, 90, 1], [0, 180, 1], [0, -90, 1]]

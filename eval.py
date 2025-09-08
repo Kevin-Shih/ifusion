@@ -16,13 +16,8 @@ from PIL import Image
 
 def eval_pose(transform_fp, gt_transform_fp, image_dir, exp_dir, id, **kwargs):
     camtoworlds = load_frames(image_dir, transform_fp, verbose=False, return_images=True)[1]
-    # print(f'given_c2w 0 = {mat2latlon(camtoworlds[0], in_deg=True, return_radius=True)[0]}')
-    # print(f'est_c2w   1 = {mat2latlon(camtoworlds[1], in_deg=True, return_radius=True)[0]}')
     gt_camtoworlds = load_frames(image_dir, gt_transform_fp, verbose=False)[1]
-    
     gt_camtoworlds = gt_camtoworlds[str2list(id)]
-    # print(f'gt_c2w    0 = {mat2latlon(gt_camtoworlds[0], in_deg=True, return_radius=True)[0]}')
-    # print(f'gt_c2w    1 = {mat2latlon(gt_camtoworlds[1], in_deg=True, return_radius=True)[0]}')
 
     pose_err = [pose_err_fn(pred, gt) for pred, gt in zip(camtoworlds[1:], gt_camtoworlds[1:])]
     pose_err = np.array(pose_err).mean(axis=0)
@@ -45,8 +40,7 @@ def eval_nvs(demo_fp, test_image_dir, test_transform_fp, **kwargs)->tuple[float,
 
 def eval_consistency(met3r_eval, exp_dir, id, **kwargs):
     # Prepare inputs of shape (batch, views, channels, height, width): views must be 2
-    # RGB range must be in [-1, 1]
-    # print(f'img shape:{len(img)},{img[0].shape}') 2, 3, 256, 256
+    # RGB range must be in [-1, 1], input shape B, k=2, c=3, 256, 256
     imgs = []
     for i in range(8):
         fp = os.path.join(exp_dir, f'demo_{i}.png')
@@ -54,7 +48,6 @@ def eval_consistency(met3r_eval, exp_dir, id, **kwargs):
         imgs.append(load_image(fp,verbose=False))
     imgs = torch.cat(imgs)
     inputs = []
-    # print(f'imgs lens : {imgs.shape[0] - 1}')
     for i in range(imgs.shape[0] - 1):
         inputs.append(torch.Tensor(imgs[i : i + 2]))
     inputs= torch.stack(inputs).cuda()
@@ -67,8 +60,6 @@ def eval_consistency(met3r_eval, exp_dir, id, **kwargs):
         return_point_clouds = True
     )
     # pcloud : (B-1) * 2 point clouds. Each image pair has 2 point clouds (left and right)
-    # print(f'score map range : {score_map[0].min()} to {score_map[0].max()}')
-    # print(f'mask range : {mask[0].min()} to {mask[0].max()}')
     from pytorch3d import io
     # if met3r_eval.distance == 'cosine':
     #     print(f'[INFO] Save pointclouds without color')

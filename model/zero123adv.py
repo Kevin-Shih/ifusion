@@ -55,7 +55,7 @@ class Zero123adv(Zero123, nn.Module):
         print("[INFO] Loaded Zero123adv")
 
     @torch.amp.autocast('cuda', enabled=False)
-    def forward(self, batch, step=15, bs=None, cond_key=None, noise=None, uncond=0.05, scale=3, ddim_eta=1, ddim_steps=75):
+    def forward(self, batch, step=50, bs=None, cond_key=None, noise=None, uncond=0.05, scale=3, ddim_eta=1, ddim_steps=75):
         # region get_input()
         image_target = batch["image_target"]
         if len(image_target.shape) == 3:

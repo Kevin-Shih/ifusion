@@ -77,12 +77,18 @@ class MultiImageInferenceDataset(Dataset, BaseDataset):
         self,
         image_dir: str = None,
         transform_fp: str = None,
+        scene_transform_fp: str = None,
         test_transform_fp: str = None,
         n_views: int = 8,
         theta: int = -20,
         radius: float = 1.0,
     ):
-        self.setup(image_dir, transform_fp)
+        if scene_transform_fp:
+            print(f"[INFO] Load whole scene from {scene_transform_fp}")
+            self.setup(image_dir, scene_transform_fp)
+        else:
+            print(f"[INFO] Load id[0,1] from {transform_fp}")
+            self.setup(image_dir, transform_fp)
         if test_transform_fp:
             self.infer_camtoworlds = load_frames(image_dir, test_transform_fp, return_images=False)[1]
         else:
