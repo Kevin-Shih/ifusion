@@ -14,7 +14,7 @@ __pycache__/
 *ckpt/
 *log/
 *out/
-*exp/
+runs/*
 
 # Data
 *rendering/

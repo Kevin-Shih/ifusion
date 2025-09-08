@@ -14,7 +14,7 @@ from rich import print
 from met3r import MEt3R
 from PIL import Image
 
-def eval_pose(transform_fp, gt_transform_fp, image_dir, exp_dir, id, **kwargs):
+def eval_pose(transform_fp, gt_transform_fp, image_dir, id, **kwargs):
     camtoworlds = load_frames(image_dir, transform_fp, verbose=False, return_images=True)[1]
     gt_camtoworlds = load_frames(image_dir, gt_transform_fp, verbose=False)[1]
     gt_camtoworlds = gt_camtoworlds[str2list(id)]
@@ -26,11 +26,8 @@ def eval_pose(transform_fp, gt_transform_fp, image_dir, exp_dir, id, **kwargs):
 
 def eval_nvs(demo_fp, test_image_dir, test_transform_fp, **kwargs)->tuple[float,float,float]:
     pred = load_image(demo_fp, resize=False, to_clip=False)
-    #print(f'[INFO 1] Loaded demo image {demo_fp} with shape {pred.shape}')
-    # print(f'[INFO 2] chunked demo image shape {torch.chunk(pred, 8, dim=-1)[0].shape}')
     pred = torch.cat(torch.chunk(pred, 8, dim=-1))
-    # print(f'[INFO 3] chunk and cat demo image shape {pred.shape}')
-    gt = load_frames(test_image_dir, test_transform_fp, to_clip=False)[0]
+    gt = load_frames(test_image_dir, test_transform_fp, to_clip=False, verbose=False)[0]
     gt = gt.to(pred.device)
 
     psnr = psnr_fn(pred, gt).item()
@@ -38,15 +35,11 @@ def eval_nvs(demo_fp, test_image_dir, test_transform_fp, **kwargs)->tuple[float,
     lpips = lpips_fn(pred, gt).item()
     return psnr, ssim, lpips
 
-def eval_consistency(met3r_eval, exp_dir, id, **kwargs):
+def eval_consistency(met3r_eval, nvs_dir, demo_fp, **kwargs): 
     # Prepare inputs of shape (batch, views, channels, height, width): views must be 2
     # RGB range must be in [-1, 1], input shape B, k=2, c=3, 256, 256
-    imgs = []
-    for i in range(8):
-        fp = os.path.join(exp_dir, f'demo_{i}.png')
-        # print(f'[INFO] Load demo image {fp}')
-        imgs.append(load_image(fp,verbose=False))
-    imgs = torch.cat(imgs)
+    imgs = load_image(demo_fp, resize=False)
+    imgs = torch.cat(torch.chunk(imgs, 8, dim=-1))
     inputs = []
     for i in range(imgs.shape[0] - 1):
         inputs.append(torch.Tensor(imgs[i : i + 2]))
@@ -63,19 +56,21 @@ def eval_consistency(met3r_eval, exp_dir, id, **kwargs):
     from pytorch3d import io
     # if met3r_eval.distance == 'cosine':
     #     print(f'[INFO] Save pointclouds without color')
+    eval_out_dir = f'{nvs_dir}/eval/'
+    os.makedirs(eval_out_dir, exist_ok=True)
     for i in range(score_map.shape[0]):
-        Image.fromarray((score_map[i].clamp(0,1).cpu().numpy() * 255).astype(np.uint8)).save(f'{exp_dir}/score_map_{i},{i+1}.png')
+        # Image.fromarray((score_map[i].clamp(0,1).cpu().numpy() * 255).astype(np.uint8)).save(f'{eval_out_dir}/score_map_{i},{i+1}.png')
         temp = torch.stack([score_map[i], score_map[i], score_map[i]], axis=-1).clamp(0,1) * torch.stack([mask[i]+0.3, mask[i]+0.3, torch.full_like(mask[i], 1)], axis=-1).clamp(0,1)
-        
-        Image.fromarray((temp * 255).cpu().numpy().astype(np.uint8)).save(f'{exp_dir}/score_map_masked_{i},{i+1}.png')
-        Image.fromarray((mask[i].clamp(0,1).cpu().numpy() * 255).astype(np.uint8)).save(f'{exp_dir}/mask_{i},{i+1}.png')
+
+        Image.fromarray((temp * 255).cpu().numpy().astype(np.uint8)).save(f'{eval_out_dir}/score_map_masked_{i},{i+1}.png')
+        # Image.fromarray((mask[i].clamp(0,1).cpu().numpy() * 255).astype(np.uint8)).save(f'{eval_out_dir}/mask_{i},{i+1}.png')
         if met3r_eval.distance == 'cosine':
             # no colors is met3r choose cosine distance as metric
-            io.save_ply(f'{exp_dir}/pointcloud_{i},{i+1}_l.ply', pcloud.points_list()[i*2])
-            io.save_ply(f'{exp_dir}/pointcloud_{i},{i+1}_r.ply', pcloud.points_list()[i*2+1])
+            io.save_ply(f'{eval_out_dir}/pointcloud_{i},{i+1}_l.ply', pcloud.points_list()[i*2])
+            io.save_ply(f'{eval_out_dir}/pointcloud_{i},{i+1}_r.ply', pcloud.points_list()[i*2+1])
         else:
-            io.IO().save_pointcloud(pcloud[i*2], f'{exp_dir}/pointcloud_{i},{i+1}_l.ply')
-            io.IO().save_pointcloud(pcloud[i*2+1], f'{exp_dir}/pointcloud_{i},{i+1}_r.ply')
+            io.IO().save_pointcloud(pcloud[i*2], f'{eval_out_dir}/pointcloud_{i},{i+1}_l.ply')
+            io.IO().save_pointcloud(pcloud[i*2+1], f'{eval_out_dir}/pointcloud_{i},{i+1}_r.ply')
             
     np.set_printoptions(precision=3, suppress=None, floatmode='fixed')
     print(f'consistency score: {score.cpu().numpy()}')
@@ -218,11 +213,11 @@ def main(config, mode):
                     **conf_dict,
             },
         )
-    # perm = list(itertools.permutations(range(5), 2))
+    perm = list(itertools.permutations(range(5), 2))
     # perm = list(itertools.combinations(range(5), 2))
-    perm = list(itertools.combinations(range(3), 2))
+    # perm = list(itertools.combinations(range(3), 2))
     ids = [",".join(map(str, p)) for p in perm]
-    scenes = sorted(os.listdir(f"{config.data.root_dir}/{config.data.name}"))[0:5]
+    scenes = sorted(os.listdir(f"{config.data.root_dir}/{config.data.name}"))[0:]
     print(f"[INFO] Found {len(scenes)} scenes: {scenes}")
     if mode[0]:
         eval_pose_all(config, scenes, ids=ids, wb_run=wb_run)

@@ -33,9 +33,9 @@ def gen_pose_all(model, config, scenes, ids):
             config.data.id = id
             set_default_latlon(config)
             optimize_pose(model, transform_dict, **config.pose)
-        os.makedirs(os.path.dirname(config.pose.scene_transform_fp), exist_ok=True)
-        with open(config.pose.scene_transform_fp, "w") as f:
-            json.dump(transform_dict, f, indent=4)
+        if config.pose.scene_transform_fp :
+            with open(config.pose.scene_transform_fp, "w") as f:
+                json.dump(transform_dict, f, indent=4)
 
 
 def gen_nvs_all(model, config, scenes, ids):
@@ -58,6 +58,7 @@ def gen_nvs_my_finetune(model, config, scenes, ids):
     # ids = [ids[0], ids[3]]
     # for scene, id in zip(scenes, ids):
     for scene in scenes:
+        # if use all pairs dont loop ids
         for id in ids:
             print(f"[INFO] Fine-tuning {scene}")
             config.data.scene = scene
@@ -77,12 +78,12 @@ def main(config, mode, gpu_ids):
             gen_nvs_my_finetune(model, config, scenes, ids=["0,1"])
     config, conf_dict = config
 
-    # perm = list(itertools.permutations(range(5), 2))
+    perm = list(itertools.permutations(range(5), 2))
     # perm = list(itertools.combinations(range(5), 2))
-    perm = list(itertools.combinations(range(3), 2))
+    # perm = list(itertools.combinations(range(3), 2))
     ids = [",".join(map(str, p)) for p in perm]
     gpu_ids = str2list(gpu_ids)
-    scenes = sorted(os.listdir(f"{config.data.root_dir}/{config.data.name}"))[0:5]
+    scenes = sorted(os.listdir(f"{config.data.root_dir}/{config.data.name}"))[0:]
 
     curr_time = time.localtime(time.time())
     mon, mday, hours = curr_time.tm_mon, curr_time.tm_mday, curr_time.tm_hour

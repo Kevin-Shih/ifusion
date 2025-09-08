@@ -1,10 +1,6 @@
 seed: 42
 
 log:
-  group_name: 'my_subset_perm52'
-  # group_name: 'scene0_all'
-  run_name: 'test'
-  run_path: bkjjqcn9
 
 data:
   name: GSO # OO3D
@@ -21,20 +17,21 @@ data:
   test_image_dir: ${data.root_dir}/${data.name}/${data.scene}/test/rgb
   test_transform_fp: ${data.root_dir}/${data.name}/${data.scene}/test/transform.json
 
-  # exp
-  exp_root_dir: exp_test2
+  # pose exp
+  exp_root_dir: runs/scene_pose/pose_only
   exp_dir: ${data.exp_root_dir}/${data.name}/${data.scene}/${data.id}
   transform_fp: ${data.exp_dir}/transform.json
-  scene_transform_fp: ${data.exp_root_dir}/${data.name}/${data.scene}/transform.json
+  scene_transform_fp: ${data.exp_root_dir}/${data.name}/${data.scene}/scene_transform.json
 
   # nvs exp
+  # Can be different from exp_root_dir. e.g. Share pose with another exp.
   nvs_root_dir: ${data.exp_root_dir}
-  nvs_dir: ${data.nvs_root_dir}/${data.name}/${data.scene}/${data.id}
+  nvs_dir: ${data.nvs_root_dir}/${data.name}/${data.scene}
   lora_ckpt_fp: ${data.nvs_dir}/lora.ckpt
   demo_fp:  ${data.nvs_dir}/demo.png
 
 model:
-  name: zero123adv
+  name: zero123
   args:
     pretrained_model_name_or_path: ldm/ckpt/zero123-xl.ckpt
     pretrained_config: ldm/ckpt/sd-objaverse-finetune-c_concat-256.yaml
@@ -69,43 +66,39 @@ pose:
         factor: 0.6
         patience: 10
 
-finetune:
-  image_dir: ${data.image_dir}
-  exp_dir: ${data.exp_dir}
-  transform_fp: null
-  scene_transform_fp: ${data.scene_transform_fp}
-  lora_ckpt_fp: ${data.lora_ckpt_fp}
-  lora_rank: 12
-  lora_target_replace_module: [CrossAttention, GEGLU]
+# finetune:
+#   image_dir: ${data.image_dir}
+#   transform_fp: ${data.scene_transform_fp}
+#   lora_ckpt_fp: ${data.lora_ckpt_fp}
+#   lora_rank: 12
+#   lora_target_replace_module: [CrossAttention, GEGLU]
 
-  args:
-    max_step: 50
-    batch_size: 8
-    optimizer:
-      name: Adam
-      args:
-        lr: 1.0e-3
-        betas: [0.9, 0.999]
-    scheduler:
-      name: MultiStepLR
-      args:
-        milestones: [25]
-        gamma: 0.1
+#   args:
+#     max_step: 30
+#     batch_size: 16
+#     optimizer:
+#       name: Adam
+#       args:
+#         lr: 1.0e-3
+#         betas: [0.9, 0.999]
+#     scheduler:
+#       name: MultiStepLR
+#       args:
+#         milestones: [25]
+#         gamma: 0.1
 
-inference:
-  image_dir: ${data.image_dir}
-  transform_fp: null
-  scene_transform_fp: ${data.scene_transform_fp}
-  test_transform_fp: ${data.test_transform_fp}
-  lora_ckpt_fp: ${data.lora_ckpt_fp}
-  demo_fp: ${data.demo_fp}
-  lora_rank: ${finetune.lora_rank}
-  lora_target_replace_module: ${finetune.lora_target_replace_module}
-  use_single_view: false
-  use_multi_view_condition: true
-  n_views: null
-  theta: null
-  radius: null
+# inference:
+#   image_dir: ${data.image_dir}
+#   transform_fp: ${data.scene_transform_fp}
+#   lora_ckpt_fp: ${data.lora_ckpt_fp}
+#   demo_fp: ${data.demo_fp}
+#   lora_rank: ${finetune.lora_rank}
+#   lora_target_replace_module: ${finetune.lora_target_replace_module}
+#   use_single_view: false
+#   use_multi_view_condition: true
+#   n_views: null
+#   theta: null
+#   radius: null
 
-  args:
-    batch_size: 8
+#   args:
+#     batch_size: 8

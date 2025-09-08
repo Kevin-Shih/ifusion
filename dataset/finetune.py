@@ -35,7 +35,14 @@ class FinetuneDataset(Dataset, BaseDataset):
 
 
 class MyFinetuneDataset(Dataset, BaseDataset):
-    def __init__(self, image_dir, transform_fp):
+    def __init__(self,
+                 image_dir,
+                transform_fp: str = None,
+    ):
+        if 'scene' in transform_fp:
+            print(f"[INFO] Load whole scene from {transform_fp}")
+        else:
+            print(f"[INFO] Load id[0,1] from {transform_fp}")
         self.setup(image_dir, transform_fp)
 
     def __len__(self):
@@ -69,18 +76,33 @@ class MyFinetuneDataset(Dataset, BaseDataset):
             **kwargs,
         )
 
+class FinetuneIterableDataset(IterableDataset, FinetuneDataset):
+    def __init__(self, image_dir, transform_fp):
+        super().__init__(image_dir, transform_fp)
+
+    def __iter__(self):
+        while True:
+            index = torch.randint(0, len(self.perm), size=(1,)).item()
+            index_target, index_cond = (
+                self.perm[index, 0].item(),
+                self.perm[index, 1].item(),
+            )
+            yield {
+                "image_target": self.all_images[index_target],
+                "image_cond": self.all_images[index_cond],
+                "T": self.get_trans(self.all_camtoworlds[index_target], self.all_camtoworlds[index_cond], in_T=True),
+            }
+
 class MyFinetuneIterableDataset(IterableDataset, MyFinetuneDataset):
     def __init__(self,
                  image_dir,
                 transform_fp: str = None,
-                scene_transform_fp: str = None,
     ):
-        if scene_transform_fp:
-            print(f"[INFO] Load whole scene from {scene_transform_fp}")
-            self.setup(image_dir, scene_transform_fp)
+        if 'scene' in transform_fp:
+            print(f"[INFO] Load whole scene from {transform_fp}")
         else:
             print(f"[INFO] Load id[0,1] from {transform_fp}")
-            self.setup(image_dir, transform_fp)
+        self.setup(image_dir, transform_fp)
 
     def __iter__(self):
         while True:
@@ -99,19 +121,14 @@ class MyFinetuneIterableDataset(IterableDataset, MyFinetuneDataset):
                 "T2": self.get_trans(self.all_camtoworlds[index_target], self.all_camtoworlds[index_cond2], in_T=True),
             }
 
-class FinetuneIterableDataset(IterableDataset, FinetuneDataset):
-    def __init__(self, image_dir, transform_fp):
-        super().__init__(image_dir, transform_fp)
+class MyFinetuneAllSceneIterableDataset(IterableDataset, MyFinetuneDataset):
+    # def setup(self, image_dir, transform_fp):
+    #     self.all_images, self.all_camtoworlds, _ = load_frames(image_dir, transform_fp)
 
-    def __iter__(self):
-        while True:
-            index = torch.randint(0, len(self.perm), size=(1,)).item()
-            index_target, index_cond = (
-                self.perm[index, 0].item(),
-                self.perm[index, 1].item(),
-            )
-            yield {
-                "image_target": self.all_images[index_target],
-                "image_cond": self.all_images[index_cond],
-                "T": self.get_trans(self.all_camtoworlds[index_target], self.all_camtoworlds[index_cond], in_T=True),
-            }
+    #     assert len(self.all_camtoworlds) == len(self.all_images)
+    #     assert self.all_images.shape[2:] == (256, 256)
+
+    #     self.perm = list(itertools.permutations(range(len(self.all_images)), 2))
+    #     self.perm = torch.from_numpy(np.array(self.perm))
+    # setup for whole eval
+    pass

@@ -252,8 +252,8 @@ def optimize_pose(
                 "latlon": pose.squeeze().tolist(),
             }
         )
-        if qry_idx < len(transform_dict["frames"]) :
-            if transform_dict["frames"][qry_idx]["loss"] > loss:
+        if qry_idx < len(transform_dict["frames"]):
+            if qry_idx != 0 and transform_dict["frames"][qry_idx]["loss"] > loss:
                 transform_dict["frames"][qry_idx] = {
                     "file_path": image_fps[qry_idx].replace(image_dir + "/", ""),
                     "transform_matrix": latlon2mat(pose.clone()).squeeze(0).tolist(),
@@ -311,6 +311,7 @@ def finetune(
             optimizer.step()
             scheduler.step()
 
+    os.makedirs(os.path.dirname(lora_ckpt_fp), exist_ok=True)
     model.save_lora(lora_ckpt_fp)
     model.remove_lora()
 
@@ -323,7 +324,6 @@ def my_finetune(
     lora_ckpt_fp: str,
     lora_rank: int,
     lora_target_replace_module: List[str],
-    exp_dir: str,
     args,
 ):
     model.inject_lora(
@@ -389,6 +389,7 @@ def my_finetune(
             optimizer.step()
             scheduler.step()
 
+    os.makedirs(os.path.dirname(lora_ckpt_fp), exist_ok=True)
     model.save_lora(lora_ckpt_fp)
     model.remove_lora()
 
@@ -438,7 +439,7 @@ def inference(
     if lora_ckpt_fp:
         model.remove_lora()
 
-    plot_image(out, fp=demo_fp)
+    # plot_image(out, fp=demo_fp)
     out = rearrange(out, "b c h w -> c h (b w)")
     plot_image(out, fp=demo_fp)
     print(f"[INFO] Saved image to {demo_fp}")
