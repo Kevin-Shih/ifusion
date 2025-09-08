@@ -13,6 +13,7 @@ from util.pose import mat2latlon
 from rich import print
 from met3r import MEt3R
 from PIL import Image
+from pytorch3d import io
 
 def eval_pose(transform_fp, gt_transform_fp, image_dir, id, **kwargs):
     camtoworlds = load_frames(image_dir, transform_fp, verbose=False, return_images=True)[1]
@@ -53,7 +54,7 @@ def eval_consistency(met3r_eval, nvs_dir, demo_fp, **kwargs):
         return_point_clouds = True
     )
     # pcloud : (B-1) * 2 point clouds. Each image pair has 2 point clouds (left and right)
-    from pytorch3d import io
+
     # if met3r_eval.distance == 'cosine':
     #     print(f'[INFO] Save pointclouds without color')
     eval_out_dir = f'{nvs_dir}/eval/'
@@ -167,7 +168,7 @@ def eval_consistency_all(config, scenes, ids, wb_run):
 
             consistency_metric.append(consistency_score)
     consistency_metric = np.array(consistency_metric)
-    # np.savez(f"{config.data.exp_root_dir}/pose_{config.data.name}.npz", metric)
+    np.savez(f"{config.data.exp_root_dir}/consistency_{config.data.name}.npz", consistency_metric)
     MEt3R_mean = np.mean(consistency_metric[:])
     if wb_run:
         MEt3R_p25, MEt3R_p50, MEt3R_p75 = np.percentile(consistency_metric[:], [25, 50, 75])
@@ -218,7 +219,7 @@ def main(config, mode):
     # perm = list(itertools.combinations(range(3), 2))
     ids = [",".join(map(str, p)) for p in perm]
     scenes = sorted(os.listdir(f"{config.data.root_dir}/{config.data.name}"))[0:]
-    print(f"[INFO] Found {len(scenes)} scenes: {scenes}")
+    print(f"[INFO] Found {len(scenes)} scenes")
     if mode[0]:
         eval_pose_all(config, scenes, ids=ids, wb_run=wb_run)
     if mode[1]:

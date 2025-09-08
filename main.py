@@ -9,9 +9,8 @@ import numpy as np
 
 from dataset.base import load_frames
 from ifusion import finetune, inference, optimize_pose, my_finetune
-
 from util.util import load_config, parse_model, set_random_seed, str2list, split_list
-
+from rich import print
 
 def set_default_latlon(config):
     id = str2list(config.data.id)[0]
@@ -84,6 +83,7 @@ def main(config, mode, gpu_ids):
     ids = [",".join(map(str, p)) for p in perm]
     gpu_ids = str2list(gpu_ids)
     scenes = sorted(os.listdir(f"{config.data.root_dir}/{config.data.name}"))[0:]
+    print(f"[INFO] Found {len(scenes)} scenes")
 
     curr_time = time.localtime(time.time())
     mon, mday, hours = curr_time.tm_mon, curr_time.tm_mday, curr_time.tm_hour
