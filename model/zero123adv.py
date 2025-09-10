@@ -115,8 +115,8 @@ class Zero123adv(Zero123, nn.Module):
         cond1["c_concat"] = [input_mask * self.model.encode_first_stage(image_cond1).mode().detach()]
         cond2["c_concat"] = [input_mask * self.model.encode_first_stage(image_cond2).mode().detach()]
         # endregion
-        # step = torch.randint(low=0, high=ddim_steps, size=(1,)).item()
-        step = 50
+        step = torch.randint(low=0, high=ddim_steps, size=(1,)).item()
+        # step = 50
         t = torch.full((target_latent.shape[0],), step, device=self.model.device).long()
 
         noise = default(noise, lambda: torch.randn_like(target_latent))
