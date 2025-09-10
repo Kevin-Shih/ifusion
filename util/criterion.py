@@ -5,7 +5,7 @@ from lpips import LPIPS
 from util.ssim import SSIM
 
 
-lpips_net = LPIPS(net="vgg").to("cuda")
+lpips_net = LPIPS(net="vgg").cuda()
 
 
 def psnr_fn(pred, gt)->torch.Tensor:

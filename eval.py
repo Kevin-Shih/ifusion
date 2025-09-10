@@ -15,14 +15,16 @@ from met3r import MEt3R
 from PIL import Image
 from pytorch3d import io
 
-def eval_pose(transform_fp, gt_transform_fp, image_dir, id, **kwargs):
-    camtoworlds = load_frames(image_dir, transform_fp, verbose=False, return_images=True)[1]
+def eval_pose(scene_transform_fp, transform_fp, gt_transform_fp, image_dir, id, **kwargs):
     gt_camtoworlds = load_frames(image_dir, gt_transform_fp, verbose=False)[1]
-    gt_camtoworlds = gt_camtoworlds[str2list(id)]
-
+    if scene_transform_fp:
+        camtoworlds = load_frames(image_dir, scene_transform_fp, verbose=False, return_images=True)[1]
+    else:
+        camtoworlds = load_frames(image_dir, transform_fp, verbose=False, return_images=True)[1]
+        gt_camtoworlds = gt_camtoworlds[str2list(id)]
     pose_err = [pose_err_fn(pred, gt) for pred, gt in zip(camtoworlds[1:], gt_camtoworlds[1:])]
-    pose_err = np.array(pose_err).mean(axis=0)
-    print(f"Rot. error: {pose_err[0]:.2f}, Trans. error: {pose_err[1]:.2f}")
+    pose_err = np.array(pose_err)
+    print(f"Rot. error: {np.median(pose_err[:, 0]):.2f}, Trans. error: {np.median(pose_err[:, 1]):.2f}")
     return pose_err
 
 def eval_nvs(demo_fp, test_image_dir, test_transform_fp, **kwargs)->tuple[float,float,float]:
@@ -80,18 +82,22 @@ def eval_consistency(met3r_eval, nvs_dir, demo_fp, **kwargs):
 
 def eval_pose_all(config, scenes, ids, wb_run):
     metric = []
-    # scenes = [scenes[0], scenes[2]]
-    # ids = [ids[0], ids[3]]
-    # for scene, id in zip(scenes, ids):
     for scene in scenes:
-        for id in ids:
-            print(f"[INFO] Evaluating pose \'{scene}\':{id}")
+        if config.data.scene_transform_fp:
+            print(f"[INFO] Evaluating pose \'{scene}\' with scene_transform_fp")
             config.data.scene = scene
-            config.data.id = id
             pose_err = eval_pose(**config.data)
-
             metric.append(pose_err)
-    metric = np.array(metric)
+        else:
+            for id in ids:
+                    print(f"[INFO] Evaluating pose \'{scene}\':{id}")
+                    config.data.scene = scene
+                    config.data.id = id
+                    pose_err = eval_pose(**config.data)
+                    metric.append(pose_err)
+    # print(f"[INFO] metric shape: {len(metric)} x {metric[0].shape}")
+    metric = np.concatenate(metric, axis=0)
+    # print(f"[INFO] metric shape after:  {metric.shape}")
     np.savez(f"{config.data.exp_root_dir}/pose_{config.data.name}.npz", metric)
     if wb_run:
         rot_p25, rot_p50, rot_p75 = np.percentile(metric[:, 0], [25, 50, 75])
@@ -110,9 +116,6 @@ def eval_pose_all(config, scenes, ids, wb_run):
 
 def eval_nvs_all(config, scenes, ids, wb_run):
     metric = []
-    # scenes = [scenes[0], scenes[2]]
-    # ids = [ids[0], ids[3]]
-    # for scene, id in zip(scenes, ids):
     for scene in scenes:
         for id in ids:
             print(f"[INFO] Evaluating nvs \'{scene}\':{id}")
@@ -235,10 +238,8 @@ if __name__ == "__main__":
     parser.add_argument('-c', "--consistency", action="store_true")
     parser.add_argument('-p', "--pose", action="store_true")
     parser.add_argument('-n', "--nvs", action="store_true")
-    parser.add_argument("--gpu_ids", type=str, default="4")
     args, extras = parser.parse_known_args()
     config = load_config(args.config, cli_args=extras)
     
     set_random_seed(config[0].seed)
-    os.environ["CUDA_VISIBLE_DEVICES"] = str(args.gpu_ids)
     main(config, [args.pose, args.nvs, args.consistency])

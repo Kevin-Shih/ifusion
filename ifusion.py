@@ -355,14 +355,14 @@ def my_finetune(
     #     freeze=True, # Default to True
     # ).cuda()
     train_loader = iter(train_loader)
-    with trange(args.max_step, ncols=140) as pbar:
+    with trange(args.max_step, ncols=160) as pbar:
         for step in pbar:
             optimizer.zero_grad()
 
             batch = next(train_loader)
             batch = {k: v.to(model.device) for k, v in batch.items()}
             noise_a, noise_b, noise, nvs_latent_a, nvs_latent_b = model(batch)
-            consist_loss = torch.nn.functional.mse_loss(noise_a, noise_b, reduction='mean')
+            consist_loss    = torch.nn.functional.mse_loss(noise_a, noise_b, reduction='mean')
             noise_pred_loss = torch.nn.functional.mse_loss(noise_a, noise, reduction='mean') + torch.nn.functional.mse_loss(noise_b, noise, reduction='mean')
             # region      commented      
             # if step%5==0:
@@ -381,13 +381,15 @@ def my_finetune(
             # loss += torch.nn.functional.mse_loss(nvs_latent_b, noise, reduction='mean')
             # loss = inconsistency(nvs_latent_a, nvs_latent_b) # l2 or met3r
             # endregion
-
-            loss = 2 * consist_loss + noise_pred_loss
-            pbar.set_description(f"step: {step}, loss: {loss.item():.6f}")
+            consist_loss    = args.consist_loss_ratio * consist_loss
+            noise_pred_loss = args.pred_loss_ratio * noise_pred_loss
+            loss = consist_loss + noise_pred_loss
+            pbar.set_description(f"step: {step}, loss: {loss.item():.4f}, c_loss: {consist_loss.item():.4f}, p_loss: {noise_pred_loss.item():.4f}")
             loss.backward()
 
             optimizer.step()
             scheduler.step()
+            # scheduler.step(loss)
 
     os.makedirs(os.path.dirname(lora_ckpt_fp), exist_ok=True)
     model.save_lora(lora_ckpt_fp)

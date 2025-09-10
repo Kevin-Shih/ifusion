@@ -2,10 +2,11 @@ seed: 42
 
 # Only for 0,1 image pair
 log:
-  group_name: 'my_subset'
+  # group_name: 'my_subset'
   # group_name: 'scene0_all'
-  run_name: 'Dualway_myfinetune_loss2:1'
-  run_path: kevin-shih/iFusion-Adv/etncr8la
+  group_name: 'all'
+  run_name: 'Dualway_ours_2:1_bs8_100it'
+  run_path: 
 
 data:
   name: GSO # OO3D
@@ -77,7 +78,7 @@ finetune:
   lora_target_replace_module: [CrossAttention, GEGLU]
 
   args:
-    max_step: 50
+    max_step: 100
     batch_size: 8
     optimizer:
       name: Adam
@@ -89,6 +90,8 @@ finetune:
       args:
         milestones: [25]
         gamma: 0.1
+    consist_loss_ratio: 2
+    pred_loss_ratio: 1
 
 inference:
   image_dir: ${data.image_dir}
