@@ -29,9 +29,10 @@ data:
   scene_transform_fp: null
 
   # nvs exp
-  nvs_dir: ${data.exp_dir}
-  lora_ckpt_fp: ${data.exp_dir}/lora.ckpt
-  demo_fp:  ${data.exp_dir}/demo.png
+  nvs_root_dir: ${data.exp_root_dir}
+  nvs_dir: ${data.nvs_root_dir}/${data.name}/${data.scene}
+  lora_ckpt_fp: ${data.nvs_dir}/lora.ckpt
+  demo_fp:  ${data.nvs_dir}/demo.png
 
 model:
   name: zero123

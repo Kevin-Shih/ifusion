@@ -3,9 +3,9 @@ seed: 42
 log:
   # group_name: 'my_subset_perm52'
   # group_name: 'scene0_all'
-  # group_name: 'all'
-  # run_name: 'scene_2:1_bs8_100it'
-  # run_path: gthby8p6
+  group_name: 'all'
+  run_name: 'scene_myGeneral'
+  run_path: 
 
 data:
   name: GSO # OO3D
@@ -79,7 +79,7 @@ finetune:
   lora_target_replace_module: [CrossAttention, GEGLU]
 
   args:
-    max_step: 100
+    max_step: 5000
     batch_size: 8
     optimizer:
       name: Adam
@@ -90,7 +90,7 @@ finetune:
       name: ReduceLROnPlateau
       args:
         mode: min
-        factor: 0.1
+        factor: 0.3
         patience: 10
     # scheduler:
     #   name: MultiStepLR

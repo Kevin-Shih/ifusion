@@ -34,7 +34,7 @@ def dualway_optimize_pose_loop(
     scheduler = parse_scheduler(args.scheduler, optimizer)
 
     total_loss = 0.0
-    with trange(args.max_step,ncols=140) as pbar:
+    with trange(args.max_step, ncols=140) as pbar:
         for step in pbar:
             optimizer.zero_grad()
 
@@ -115,7 +115,7 @@ def original_optimize_pose_loop(
     scheduler = parse_scheduler(args.scheduler, optimizer)
 
     total_loss = 0.0
-    with trange(args.max_step) as pbar:
+    with trange(args.max_step, ncols=140) as pbar:
         for step in pbar:
             optimizer.zero_grad()
 
@@ -445,11 +445,11 @@ def my_finetune_general(
             loss.backward()
 
             optimizer.step()
-            scheduler.step()
-            # scheduler.step(loss)
-            if step%50==49:
+            # scheduler.step()
+            scheduler.step(loss)
+            if step % 50== 49:
                 lora_ckpt_fp = f'{config.data.nvs_root_dir}/{config.data.name}/lora/lora_{step + 1}.ckpt'
-                # print(f"[INFO] Saving intermediate lora to {lora_ckpt_fp}")
+                # pbar.display(f"[INFO] Saving intermediate lora to {lora_ckpt_fp}")
                 os.makedirs(os.path.dirname(lora_ckpt_fp), exist_ok=True)
                 model.save_lora(lora_ckpt_fp)
     model.save_lora(config.data.lora_ckpt_fp)
@@ -502,6 +502,50 @@ def inference(
         model.remove_lora()
 
     # plot_image(out, fp=demo_fp)
+    os.makedirs(os.path.dirname(demo_fp), exist_ok=True)
+    out = rearrange(out, "b c h w -> c h (b w)")
+    plot_image(out, fp=demo_fp)
+    print(f"[INFO] Saved image to {demo_fp}")
+
+    return out
+
+def inference_all(
+    model,
+    image_dir: str,
+    transform_fp: str,
+    test_transform_fp: str,
+    lora_ckpt_fp: str,
+    demo_fp: str,
+    lora_rank: int,
+    lora_target_replace_module: List[str],
+    use_single_view: bool,
+    use_multi_view_condition: bool,
+    n_views: int,
+    theta: float,
+    radius: float,
+    args,
+):
+    if not use_single_view and use_multi_view_condition:
+        test_dataset = MultiImageInferenceDataset
+        generate_fn = model.generate_from_tensor_multi_cond
+    else:
+        test_dataset = SingleImageInferenceDataset
+        generate_fn = model.generate_from_tensor
+
+    test_dataset = test_dataset(
+        image_dir=image_dir, transform_fp=transform_fp, test_transform_fp=test_transform_fp, n_views=n_views, theta=theta, radius=radius
+    )
+    test_loader = test_dataset.loader(args.batch_size)
+    for batch in test_loader:
+        batch = {k: v.to(model.device) for k, v in batch.items()}
+        out = generate_fn(
+            image=batch["image_cond"],
+            theta=batch["theta"],
+            azimuth=batch["azimuth"],
+            distance=batch["distance"],
+        )
+
+    os.makedirs(os.path.dirname(demo_fp), exist_ok=True)
     out = rearrange(out, "b c h w -> c h (b w)")
     plot_image(out, fp=demo_fp)
     print(f"[INFO] Saved image to {demo_fp}")

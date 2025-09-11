@@ -18,7 +18,7 @@ data:
   test_transform_fp: ${data.root_dir}/${data.name}/${data.scene}/test/transform.json
 
   # pose exp
-  exp_root_dir: runs/scene_pose/pose_only
+  exp_root_dir: runs/scene_pose/
   exp_dir: ${data.exp_root_dir}/${data.name}/${data.scene}/${data.id}
   transform_fp: ${data.exp_dir}/transform.json
   scene_transform_fp: ${data.exp_root_dir}/${data.name}/${data.scene}/scene_transform.json
@@ -50,7 +50,7 @@ pose:
   default_latlon: ['${pose.default_theta}', '${pose.default_azimuth}', '${pose.default_radius}']
   search_radius_range: 0.8
   use_step_ratio: true
-  use_dualway: true
+  use_dualway: false
 
   args:
     max_step: 100

@@ -5,8 +5,8 @@ log:
   # group_name: 'my_subset'
   # group_name: 'scene0_all'
   group_name: 'all'
-  run_name: 'test'
-  run_path: iloabtgz
+  run_name: 'Dualway_ours_2:1_bs8_100it'
+  run_path: 
 
 data:
   name: GSO # OO3D

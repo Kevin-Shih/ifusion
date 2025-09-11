@@ -55,7 +55,7 @@ class Zero123adv(Zero123, nn.Module):
         print("[INFO] Loaded Zero123adv")
 
     @torch.amp.autocast('cuda', enabled=False)
-    def forward(self, batch, step=50, bs=None, cond_key=None, noise=None, uncond=0.05, scale=3, ddim_eta=1, ddim_steps=75):
+    def forward(self, batch, ddpm_step=50, bs=None, noise=None, uncond=0.05, scale=3, ddim_eta=1, max_ddim_steps=50):
         # region get_input()
         image_target = batch["image_target"]
         if len(image_target.shape) == 3:
@@ -115,18 +115,19 @@ class Zero123adv(Zero123, nn.Module):
         cond1["c_concat"] = [input_mask * self.model.encode_first_stage(image_cond1).mode().detach()]
         cond2["c_concat"] = [input_mask * self.model.encode_first_stage(image_cond2).mode().detach()]
         # endregion
-        step = torch.randint(low=0, high=ddim_steps, size=(1,)).item()
+        ddpm_step = default(ddpm_step, torch.randint(low=0, high=self.model.num_timesteps, size=(1,)).item())
         # step = 50
-        t = torch.full((target_latent.shape[0],), step, device=self.model.device).long()
+        ddim_step = (ddpm_step * max_ddim_steps) // self.model.num_timesteps
+        t = torch.full((target_latent.shape[0],), ddpm_step, device=self.model.device).long()
 
         noise = default(noise, lambda: torch.randn_like(target_latent))
         x_noisy = self.model.q_sample(x_start=target_latent, t=t, noise=noise)
         noise_pred1 = self.model.apply_model(x_noisy, t, cond1)
         noise_pred2 = self.model.apply_model(x_noisy, t, cond2)
 
-        self.scheduler.set_timesteps(ddim_steps)
-        latent1 = self.scheduler.step(noise_pred1, step, target_latent, eta=ddim_eta)["pred_original_sample"]
-        latent2 = self.scheduler.step(noise_pred2, step, target_latent, eta=ddim_eta)["pred_original_sample"]
+        self.scheduler.set_timesteps(max_ddim_steps)
+        latent1 = self.scheduler.step(noise_pred1, ddim_step, target_latent, eta=ddim_eta)["pred_original_sample"]
+        latent2 = self.scheduler.step(noise_pred2, ddim_step, target_latent, eta=ddim_eta)["pred_original_sample"]
         # latent_loss = torch.nn.functional.mse_loss(latent1, latent2, reduction='none').mean([1, 2, 3])
         # image1 = self.decode_latent(latent1)
         # image2 = self.decode_latent(latent2)

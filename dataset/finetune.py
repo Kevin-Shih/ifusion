@@ -173,8 +173,8 @@ class MyFinetuneAllSceneIterableDataset(IterableDataset, MyFinetuneGeneralDatase
             self.all_images = images.unsqueeze(0) # S=1, k, C, H, W
             self.all_camtoworlds = camtoworlds.unsqueeze(0) # S=1, k, 4, 4
         else:
-            self.all_images = torch.cat(self.all_images, images.unsqueeze(0)) # S+=1, k, C, H, W
-            self.all_camtoworlds = torch.cat(self.all_camtoworlds, camtoworlds.unsqueeze(0)) # S+=1, k, 4, 4
+            self.all_images = torch.cat((self.all_images, images.unsqueeze(0))) # S+=1, k, C, H, W
+            self.all_camtoworlds = torch.cat((self.all_camtoworlds, camtoworlds.unsqueeze(0))) # S+=1, k, 4, 4
 
     def __iter__(self):
         while True:
