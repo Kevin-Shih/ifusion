@@ -1,12 +1,11 @@
 seed: 42
 
-# Only for 0,1 image pair
 log:
-  # group_name: 'my_subset'
+  # group_name: 'my_subset_perm52'
   # group_name: 'scene0_all'
-  group_name: 'all'
-  run_name: 'test'
-  run_path: iloabtgz
+  # group_name: 'all'
+  # run_name: 'scene_2:1_bs8_100it'
+  # run_path: gthby8p6
 
 data:
   name: GSO # OO3D
@@ -24,12 +23,13 @@ data:
   test_transform_fp: ${data.root_dir}/${data.name}/${data.scene}/test/transform.json
 
   # pose exp
-  exp_root_dir: exp
+  exp_root_dir: runs/scene_pose/pose_only
   exp_dir: ${data.exp_root_dir}/${data.name}/${data.scene}/${data.id}
   transform_fp: ${data.exp_dir}/transform.json
-  scene_transform_fp: null
+  scene_transform_fp: ${data.exp_root_dir}/${data.name}/${data.scene}/scene_transform.json
 
   # nvs exp
+  # Can be different from exp_root_dir. e.g. Share pose with another exp.
   nvs_root_dir: ${data.exp_root_dir}
   nvs_dir: ${data.nvs_root_dir}/${data.name}/${data.scene}
   lora_ckpt_fp: ${data.nvs_dir}/lora.ckpt
@@ -42,38 +42,38 @@ model:
     pretrained_config: ldm/ckpt/sd-objaverse-finetune-c_concat-256.yaml
     vram_O: false
 
-# pose:
-#   image_dir: ${data.image_dir}
-#   transform_fp: ${data.transform_fp}
-#   scene_transform_fp: ${data.scene_transform_fp}
-#   demo_fp: ${data.demo_fp}
-#   id: ${data.id}
-#   init_latlon: [[0, 0, 1], [0, 90, 1], [0, 180, 1], [0, -90, 1]]
-#   default_theta: 0
-#   default_azimuth: 0
-#   default_radius: 1.0
-#   default_latlon: ['${pose.default_theta}', '${pose.default_azimuth}', '${pose.default_radius}']
-#   search_radius_range: 0.8
-#   use_step_ratio: true
-#   use_dualway: true
+pose:
+  # image_dir: ${data.image_dir}
+  # transform_fp: ${data.transform_fp}
+  # scene_transform_fp: ${data.scene_transform_fp}
+  # demo_fp: ${data.demo_fp}
+  # id: ${data.id}
+  # init_latlon: [[0, 0, 1], [0, 90, 1], [0, 180, 1], [0, -90, 1]]
+  # default_theta: 0
+  # default_azimuth: 0
+  # default_radius: 1.0
+  # default_latlon: ['${pose.default_theta}', '${pose.default_azimuth}', '${pose.default_radius}']
+  # search_radius_range: 0.8
+  # use_step_ratio: true
+  # use_dualway: true
 
-#   args:
-#     max_step: 100
-#     optimizer:
-#       name: Adam
-#       args:
-#         lr: 1.0e-1
-#         betas: [0.9, 0.999]
-#     scheduler:
-#       name: ReduceLROnPlateau
-#       args:
-#         mode: min
-#         factor: 0.6
-#         patience: 10
+  # args:
+  #   max_step: 100
+  #   optimizer:
+  #     name: Adam
+  #     args:
+  #       lr: 1.0e-1
+  #       betas: [0.9, 0.999]
+  #   scheduler:
+  #     name: ReduceLROnPlateau
+  #     args:
+  #       mode: min
+  #       factor: 0.6
+  #       patience: 10
 
 finetune:
   image_dir: ${data.image_dir}
-  transform_fp: ${data.transform_fp}
+  transform_fp: ${data.scene_transform_fp}
   lora_ckpt_fp: ${data.lora_ckpt_fp}
   lora_rank: 12
   lora_target_replace_module: [CrossAttention, GEGLU]
@@ -84,19 +84,25 @@ finetune:
     optimizer:
       name: Adam
       args:
-        lr: 1.0e-3
+        lr: 1e-3
         betas: [0.9, 0.999]
     scheduler:
-      name: MultiStepLR
+      name: ReduceLROnPlateau
       args:
-        milestones: [25]
-        gamma: 0.1
+        mode: min
+        factor: 0.1
+        patience: 10
+    # scheduler:
+    #   name: MultiStepLR
+    #   args:
+    #     milestones: [25]
+    #     gamma: 0.1
     consist_loss_ratio: 2
     pred_loss_ratio: 1
 
 inference:
   image_dir: ${data.image_dir}
-  transform_fp: ${data.transform_fp}
+  transform_fp: ${data.scene_transform_fp}
   test_transform_fp: ${data.test_transform_fp}
   lora_ckpt_fp: ${data.lora_ckpt_fp}
   demo_fp: ${data.demo_fp}

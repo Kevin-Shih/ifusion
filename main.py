@@ -8,7 +8,7 @@ import json
 import numpy as np
 
 from dataset.base import load_frames
-from ifusion import finetune, inference, optimize_pose, my_finetune
+from ifusion import finetune, inference, optimize_pose, my_finetune, my_finetune_general
 from util.util import load_config, parse_model, set_random_seed, str2list, split_list
 from rich import print
 
@@ -57,12 +57,21 @@ def gen_nvs_my_finetune(model, config, scenes, ids):
     # ids = [ids[0], ids[3]]
     # for scene, id in zip(scenes, ids):
     for scene in scenes:
-        # if use all pairs dont loop ids
         for id in ids:
             print(f"[INFO] Fine-tuning {scene}")
             config.data.scene = scene
             config.data.id = id
-            my_finetune(model, scenes, ids, **config.finetune)
+            my_finetune(model, **config.finetune)
+            inference(model, **config.inference)
+
+def gen_nvs_my_finetune_general(model, config, scenes, ids):
+    print(f"[INFO] Fine-tuning (Generalizable)")
+    config.data.lora_ckpt_fp = f'{config.data.nvs_root_dir}/{config.data.name}/lora.ckpt'
+    my_finetune_general(model, config, scenes, ids)
+    for scene in scenes:
+        for id in ids:
+            config.data.scene = scene
+            config.data.id = id
             inference(model, **config.inference)
 
 def main(config, mode, gpu_ids):
@@ -73,8 +82,10 @@ def main(config, mode, gpu_ids):
             gen_pose_all(model, config, scenes, ids)
         if mode[1]:
             gen_nvs_all(model, config, scenes, ids=["0,1"])
-        if mode[2]:
+        elif mode[2]:
             gen_nvs_my_finetune(model, config, scenes, ids=["0,1"])
+        elif mode[3]:
+            gen_nvs_my_finetune_general(model, config, scenes, ids=["0,1"])
     config, conf_dict = config
 
     perm = list(itertools.permutations(range(5), 2))
@@ -153,11 +164,12 @@ def main(config, mode, gpu_ids):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", type=str, default="config/main.yaml")
-    parser.add_argument("--pose", action="store_true")
-    parser.add_argument("--nvs", action="store_true")
+    parser.add_argument('-p', "--pose", action="store_true")
+    parser.add_argument('-n', "--nvs", action="store_true")
     parser.add_argument("--my_nvs", action="store_true")
+    parser.add_argument("--my_nvs_general", action="store_true")
     parser.add_argument("--gpu_ids", type=str, default="0")
     args, extras = parser.parse_known_args()
     config = load_config(args.config, cli_args=extras)
     set_random_seed(config[0].seed)
-    main(config, [args.pose, args.nvs, args.my_nvs], args.gpu_ids)
+    main(config, [args.pose, args.nvs, args.my_nvs, args.my_nvs_general], args.gpu_ids)

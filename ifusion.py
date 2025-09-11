@@ -8,7 +8,7 @@ from einops import rearrange
 from liegroups.torch import SE3
 from tqdm import trange
 
-from dataset.finetune import FinetuneIterableDataset, MyFinetuneIterableDataset
+from dataset.finetune import FinetuneIterableDataset, MyFinetuneIterableDataset, MyFinetuneAllSceneIterableDataset
 from dataset.inference import MultiImageInferenceDataset, SingleImageInferenceDataset
 from util.pose import latlon2mat, make_T, mat2latlon
 from util.typing import *
@@ -317,8 +317,6 @@ def finetune(
 
 def my_finetune(
     model,
-    scenes: List[str],
-    ids: List[str],
     image_dir: str,
     transform_fp: str,
     lora_ckpt_fp: str,
@@ -330,6 +328,58 @@ def my_finetune(
         rank=lora_rank,
         target_replace_module=lora_target_replace_module,
     )
+
+    train_dataset = MyFinetuneIterableDataset(image_dir, transform_fp)
+    train_loader = train_dataset.loader(args.batch_size)
+    optimizer = parse_optimizer(args.optimizer, model.require_grad_params)
+    scheduler = parse_scheduler(args.scheduler, optimizer)
+    
+    # from met3r import MEt3R
+    # met3r_eval = MEt3R(
+    #     img_size=256, # Default to 256, set to `None` to use the input resolution on the fly!
+    #     use_norm=True, # Default to True 
+    #     backbone="mast3r", # Default to MASt3R, select from ["mast3r", "dust3r", "raft"]
+    #     feature_backbone="dino16", # Default to DINO, select from ["dino16", "dinov2", "maskclip", "vit", "clip", "resnet50"]
+    #     feature_backbone_weights="mhamilton723/FeatUp", # Default
+    #     upsampler="featup", # Default to FeatUP upsampling, select from ["featup", "nearest", "bilinear", "bicubic"]
+    #     distance="cosine", # Default to feature similarity, select from ["cosine", "lpips", "rmse", "psnr", "mse", "ssim"]
+    #     freeze=True, # Default to True
+    # ).cuda()
+    train_loader = iter(train_loader)
+    with trange(args.max_step, ncols=160) as pbar:
+        for step in pbar:
+            optimizer.zero_grad()
+
+            batch = next(train_loader)
+            batch = {k: v.to(model.device) for k, v in batch.items()}
+            noise_a, noise_b, noise, nvs_latent_a, nvs_latent_b = model(batch)
+            consist_loss    = torch.nn.functional.mse_loss(noise_a, noise_b, reduction='mean')
+            noise_pred_loss = torch.nn.functional.mse_loss(noise_a, noise, reduction='mean') + torch.nn.functional.mse_loss(noise_b, noise, reduction='mean')
+            consist_loss    = args.consist_loss_ratio * consist_loss
+            noise_pred_loss = args.pred_loss_ratio * noise_pred_loss
+            loss = consist_loss + noise_pred_loss
+            pbar.set_description(f"step: {step}, loss: {loss.item():.4f}, c_loss: {consist_loss.item():.4f}, p_loss: {noise_pred_loss.item():.4f}")
+            loss.backward()
+
+            optimizer.step()
+            scheduler.step()
+            # scheduler.step(loss)
+
+    os.makedirs(os.path.dirname(lora_ckpt_fp), exist_ok=True)
+    model.save_lora(lora_ckpt_fp)
+    model.remove_lora()
+
+def my_finetune_general(
+    model,
+    config: Dict,
+    scenes: List[str],
+    ids: List[str],
+):
+    args = config.finetune.args
+    model.inject_lora(
+        rank=config.finetune.lora_rank,
+        target_replace_module=config.finetune.lora_target_replace_module,
+    )
     
     # rand scenes index -> batch size scene
     # rand ids index -> 1 for all scene (2 index, 1 for ref., 1 for target)
@@ -338,7 +388,14 @@ def my_finetune(
     # img_idxs, next_img_idxs = torch.randint(0, len(ids), (2), device=model.device)
     # next_img_idxs[1] = img_idxs[1]  # make sure the second image has the same idx for all scenes
 
-    train_dataset = MyFinetuneIterableDataset(image_dir, transform_fp)
+    train_dataset = MyFinetuneAllSceneIterableDataset(len(scenes))
+    for scene in scenes:
+        for id in ids:
+            config.data.scene = scene
+            config.data.id = id
+            print(f"[INFO] Adding scene {scene}, id {id}")
+            train_dataset.add_scenes(config.finetune.image_dir, config.finetune.transform_fp)
+
     train_loader = train_dataset.loader(args.batch_size)
     optimizer = parse_optimizer(args.optimizer, model.require_grad_params)
     scheduler = parse_scheduler(args.scheduler, optimizer)
@@ -390,9 +447,12 @@ def my_finetune(
             optimizer.step()
             scheduler.step()
             # scheduler.step(loss)
-
-    os.makedirs(os.path.dirname(lora_ckpt_fp), exist_ok=True)
-    model.save_lora(lora_ckpt_fp)
+            if step%50==49:
+                lora_ckpt_fp = f'{config.data.nvs_root_dir}/{config.data.name}/lora/lora_{step + 1}.ckpt'
+                # print(f"[INFO] Saving intermediate lora to {lora_ckpt_fp}")
+                os.makedirs(os.path.dirname(lora_ckpt_fp), exist_ok=True)
+                model.save_lora(lora_ckpt_fp)
+    model.save_lora(config.data.lora_ckpt_fp)
     model.remove_lora()
 
 def inference(
