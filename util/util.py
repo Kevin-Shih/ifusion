@@ -34,7 +34,6 @@ def parse_scheduler(config, optim):
 
 
 def parse_model(config):
-    # print(f"[INFO] Loading model {config.name}")
     models = importlib.import_module("model." + config.name)
     model = getattr(models, config.name[0].upper() + config.name[1:])(**config.args)
     return model

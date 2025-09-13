@@ -64,20 +64,19 @@ def gen_nvs_my_finetune(model, config, scenes, ids):
             my_finetune(model, **config.finetune)
             inference(model, **config.inference)
 
-def gen_nvs_my_finetune_general(model, config, scenes, ids):
+def gen_nvs_my_finetune_general(model, config, scenes, ids, wb_run):
     print(f"[INFO] Fine-tuning (Generalizable)")
-    config.data.lora_ckpt_fp = f'{config.data.nvs_root_dir}/{config.data.name}/lora.ckpt'
-    my_finetune_general(model, config, scenes, ids)
+    my_finetune_general(model, config, scenes, ids, wb_run, remove_lora=False)
     for scene in scenes:
         for id in ids:
             config.data.scene = scene
             config.data.id = id
             inference_all(model, **config.inference)
+    model.remove_lora()
 
 def gen_nvs_from_ckpt(model, config, scenes, ids):
-    # print(f"[INFO] Fine-tuning (Generalizable)")
-    # config.data.lora_ckpt_fp = f'{config.data.nvs_root_dir}/{config.data.name}/lora.ckpt'
-    config.data.lora_ckpt_fp = f'{config.data.nvs_root_dir}/{config.data.name}/lora/lora_1000.ckpt'
+    # config.data.lora_ckpt_fp = f'{config.data.nvs_root}/{config.data.name}/lora.ckpt'
+    # config.data.lora_ckpt_fp = f'{config.data.nvs_root}/{config.data.name}/lora/lora_1000.ckpt'
     model.inject_lora(
         ckpt_fp=config.inference.lora_ckpt_fp,
         rank=config.inference.lora_rank,
@@ -90,7 +89,7 @@ def gen_nvs_from_ckpt(model, config, scenes, ids):
             inference(model, **config.inference)
 
 def main(config, mode, gpu_ids):
-    def worker(config, mode, scenes, ids, gpu_id):
+    def worker(config, mode, scenes, ids, gpu_id,wb_run):
         os.environ["CUDA_VISIBLE_DEVICES"] = str(gpu_id)
         model = parse_model(config.model)
         if mode[0]:
@@ -100,7 +99,7 @@ def main(config, mode, gpu_ids):
         elif mode[2]:
             gen_nvs_my_finetune(model, config, scenes, ids=["0,1"])
         elif mode[3]:
-            gen_nvs_my_finetune_general(model, config, scenes, ids=["0,1"])
+            gen_nvs_my_finetune_general(model, config, scenes, ids=["0,1"], wb_run=wb_run)
         elif mode[4]:
             gen_nvs_from_ckpt(model, config, scenes, ids=["0,1"])
     config, conf_dict = config
@@ -164,29 +163,30 @@ def main(config, mode, gpu_ids):
                     **conf_dict,
             },
         )
-
+    
     # split scenes and multi-process
     scenes = split_list(scenes, len(gpu_ids))
     processes = []
     for i, gpu_id in enumerate(gpu_ids):
-        p = multiprocessing.Process(target=worker, args=(config, mode, scenes[i], ids, gpu_id))
+        p = multiprocessing.Process(target=worker, args=(config, mode, scenes[i], ids, gpu_id, wb_run))
         processes.append(p)
         p.start()
-
+    print(f"[INFO] Started {len(processes)} processes")
     for p in processes:
         p.join()
+    
     if wb_run:
         wb_run.finish()
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--config", type=str, default="config/main.yaml")
+    parser.add_argument('-c', "--config", type=str, default="config/main.yaml")
     parser.add_argument('-p', "--pose", action="store_true")
-    parser.add_argument('-1', '-n', "--nvs", action="store_true")
+    parser.add_argument('-1', "--nvs", action="store_true")
     parser.add_argument('-2', "--my_nvs", action="store_true")
     parser.add_argument('-3', "--my_nvs_general", action="store_true")
     parser.add_argument('-4', "--my_lora_nvs", action="store_true")
-    parser.add_argument("--gpu_ids", type=str, default="0")
+    parser.add_argument('-g', "--gpu_ids", type=str, default="0")
     args, extras = parser.parse_known_args()
     config = load_config(args.config, cli_args=extras)
     set_random_seed(config[0].seed)

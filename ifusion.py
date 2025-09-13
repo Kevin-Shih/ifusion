@@ -1,12 +1,13 @@
 import json
-from glob import glob
 import os
-
-import numpy as np
+import wandb
 import torch
+import numpy as np
 from einops import rearrange
-from liegroups.torch import SE3
 from tqdm import trange
+from glob import glob
+from liegroups.torch import SE3
+
 
 from dataset.finetune import FinetuneIterableDataset, MyFinetuneIterableDataset, MyFinetuneAllSceneIterableDataset
 from dataset.inference import MultiImageInferenceDataset, SingleImageInferenceDataset
@@ -14,7 +15,6 @@ from util.pose import latlon2mat, make_T, mat2latlon
 from util.typing import *
 from util.util import load_image, parse_optimizer, parse_scheduler, str2list
 from util.viz import plot_image
-from PIL import Image
 
 def dualway_optimize_pose_loop(
     model,
@@ -34,7 +34,7 @@ def dualway_optimize_pose_loop(
     scheduler = parse_scheduler(args.scheduler, optimizer)
 
     total_loss = 0.0
-    with trange(args.max_step, ncols=140) as pbar:
+    with trange(args.max_step, ncols=130) as pbar:
         for step in pbar:
             optimizer.zero_grad()
 
@@ -115,7 +115,7 @@ def original_optimize_pose_loop(
     scheduler = parse_scheduler(args.scheduler, optimizer)
 
     total_loss = 0.0
-    with trange(args.max_step, ncols=140) as pbar:
+    with trange(args.max_step, ncols=130) as pbar:
         for step in pbar:
             optimizer.zero_grad()
 
@@ -297,7 +297,7 @@ def finetune(
     scheduler = parse_scheduler(args.scheduler, optimizer)
 
     train_loader = iter(train_loader)
-    with trange(args.max_step, ncols=140) as pbar:
+    with trange(args.max_step, ncols=130) as pbar:
         for step in pbar:
             optimizer.zero_grad()
 
@@ -333,27 +333,15 @@ def my_finetune(
     train_loader = train_dataset.loader(args.batch_size)
     optimizer = parse_optimizer(args.optimizer, model.require_grad_params)
     scheduler = parse_scheduler(args.scheduler, optimizer)
-    
-    # from met3r import MEt3R
-    # met3r_eval = MEt3R(
-    #     img_size=256, # Default to 256, set to `None` to use the input resolution on the fly!
-    #     use_norm=True, # Default to True 
-    #     backbone="mast3r", # Default to MASt3R, select from ["mast3r", "dust3r", "raft"]
-    #     feature_backbone="dino16", # Default to DINO, select from ["dino16", "dinov2", "maskclip", "vit", "clip", "resnet50"]
-    #     feature_backbone_weights="mhamilton723/FeatUp", # Default
-    #     upsampler="featup", # Default to FeatUP upsampling, select from ["featup", "nearest", "bilinear", "bicubic"]
-    #     distance="cosine", # Default to feature similarity, select from ["cosine", "lpips", "rmse", "psnr", "mse", "ssim"]
-    #     freeze=True, # Default to True
-    # ).cuda()
     train_loader = iter(train_loader)
-    with trange(args.max_step, ncols=160) as pbar:
+    with trange(args.max_step, ncols=130) as pbar:
         for step in pbar:
             optimizer.zero_grad()
 
             batch = next(train_loader)
             batch = {k: v.to(model.device) for k, v in batch.items()}
             noise_a, noise_b, noise, nvs_latent_a, nvs_latent_b = model(batch)
-            consist_loss    = torch.nn.functional.mse_loss(noise_a, noise_b, reduction='mean')
+            consist_loss    = torch.nn.functional.mse_loss(noise_a, noise_b, reduction='mean') # or cosine?
             noise_pred_loss = torch.nn.functional.mse_loss(noise_a, noise, reduction='mean') + torch.nn.functional.mse_loss(noise_b, noise, reduction='mean')
             consist_loss    = args.consist_loss_ratio * consist_loss
             noise_pred_loss = args.pred_loss_ratio * noise_pred_loss
@@ -374,6 +362,8 @@ def my_finetune_general(
     config: Dict,
     scenes: List[str],
     ids: List[str],
+    wb_run: wandb.Run,
+    remove_lora: bool = True,
 ):
     args = config.finetune.args
     model.inject_lora(
@@ -393,26 +383,15 @@ def my_finetune_general(
         for id in ids:
             config.data.scene = scene
             config.data.id = id
-            print(f"[INFO] Adding scene {scene}, id {id}")
-            train_dataset.add_scenes(config.finetune.image_dir, config.finetune.transform_fp)
+            # print(f"[INFO] Adding scene {scene}, id {id}")
+            train_dataset.add_scenes(config.finetune.image_dir, config.finetune.transform_fp, verbose=False)
 
     train_loader = train_dataset.loader(args.batch_size)
     optimizer = parse_optimizer(args.optimizer, model.require_grad_params)
     scheduler = parse_scheduler(args.scheduler, optimizer)
-    
-    # from met3r import MEt3R
-    # met3r_eval = MEt3R(
-    #     img_size=256, # Default to 256, set to `None` to use the input resolution on the fly!
-    #     use_norm=True, # Default to True 
-    #     backbone="mast3r", # Default to MASt3R, select from ["mast3r", "dust3r", "raft"]
-    #     feature_backbone="dino16", # Default to DINO, select from ["dino16", "dinov2", "maskclip", "vit", "clip", "resnet50"]
-    #     feature_backbone_weights="mhamilton723/FeatUp", # Default
-    #     upsampler="featup", # Default to FeatUP upsampling, select from ["featup", "nearest", "bilinear", "bicubic"]
-    #     distance="cosine", # Default to feature similarity, select from ["cosine", "lpips", "rmse", "psnr", "mse", "ssim"]
-    #     freeze=True, # Default to True
-    # ).cuda()
+
     train_loader = iter(train_loader)
-    with trange(args.max_step, ncols=160) as pbar:
+    with trange(args.max_step, ncols=130) as pbar:
         for step in pbar:
             optimizer.zero_grad()
 
@@ -438,22 +417,54 @@ def my_finetune_general(
             # loss += torch.nn.functional.mse_loss(nvs_latent_b, noise, reduction='mean')
             # loss = inconsistency(nvs_latent_a, nvs_latent_b) # l2 or met3r
             # endregion
-            consist_loss    = args.consist_loss_ratio * consist_loss
-            noise_pred_loss = args.pred_loss_ratio * noise_pred_loss
+            consist_loss    *= args.consist_loss_ratio
+            noise_pred_loss *= args.pred_loss_ratio
             loss = consist_loss + noise_pred_loss
-            pbar.set_description(f"step: {step}, loss: {loss.item():.4f}, c_loss: {consist_loss.item():.4f}, p_loss: {noise_pred_loss.item():.4f}")
             loss.backward()
+            pbar.set_description(f"step: {step}, loss: {loss.item():.4f}, c_loss: {consist_loss.item():.4f}, p_loss: {noise_pred_loss.item():.4f}")
+            if wb_run:
+                wb_run.log({
+                    "train/loss": loss.item(),
+                    "train/consist_loss": consist_loss.item(),
+                    "train/noise_pred_loss": noise_pred_loss.item(),
+                    "train/lr": scheduler.get_last_lr()[0],
+                }, step=step+1)
 
             optimizer.step()
             # scheduler.step()
             scheduler.step(loss)
             if step % 50== 49:
-                lora_ckpt_fp = f'{config.data.nvs_root_dir}/{config.data.name}/lora/lora_{step + 1}.ckpt'
-                # pbar.display(f"[INFO] Saving intermediate lora to {lora_ckpt_fp}")
-                os.makedirs(os.path.dirname(lora_ckpt_fp), exist_ok=True)
-                model.save_lora(lora_ckpt_fp)
+                lora_ckpt_fp = f'{config.data.nvs_root}/{config.data.name}/lora/lora_{step + 1}.ckpt'
+                metric = ckpt_infer_and_eval(model, config, scenes, ids, lora_ckpt_fp=lora_ckpt_fp)
+                if wb_run:
+                    PSNR_mean  = np.mean(metric[:, 0])
+                    SSIM_mean  = np.mean(metric[:, 1])
+                    LPIPS_mean = np.mean(metric[:, 2])
+                    wb_run.log({
+                        "eval/PSNR":  PSNR_mean,
+                        "eval/SSIM":  SSIM_mean,
+                        "eval/LPIPS": LPIPS_mean,
+                    }, step=step+1)
     model.save_lora(config.data.lora_ckpt_fp)
-    model.remove_lora()
+    if  remove_lora:
+        model.remove_lora()
+
+def ckpt_infer_and_eval(model, config, scenes, ids, lora_ckpt_fp):
+    os.makedirs(os.path.dirname(lora_ckpt_fp), exist_ok=True)
+    print()
+    model.save_lora(lora_ckpt_fp)
+    print(f"[INFO] Evaluating 1/10 scenes")
+    metric=[]
+    # config.data.lora_ckpt_fp = lora_ckpt_fp
+    from eval import eval_nvs
+    for scene in scenes[::10]: # infer 1/10 scenes
+        for id in ids:
+            config.data.scene = scene
+            config.data.id = id
+            inference_all(model, **config.inference)
+            metric.append(eval_nvs(**config.data))
+    metric = np.array(metric)
+    return metric
 
 def inference(
     model,
@@ -549,5 +560,4 @@ def inference_all(
     out = rearrange(out, "b c h w -> c h (b w)")
     plot_image(out, fp=demo_fp)
     print(f"[INFO] Saved image to {demo_fp}")
-
     return out

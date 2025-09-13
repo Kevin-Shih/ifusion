@@ -4,8 +4,8 @@ log:
   # group_name: 'my_subset_perm52'
   # group_name: 'scene0_all'
   group_name: 'all'
-  run_name: 'scene_2:1_bs8_100it'
-  run_path: 
+  run_name: 'FixedScene_my_2:1_100it_50step'
+  run_path: 92xg70go
 
 data:
   name: GSO # OO3D
@@ -23,15 +23,15 @@ data:
   test_transform_fp: ${data.root_dir}/${data.name}/${data.scene}/test/transform.json
 
   # pose exp
-  exp_root_dir: runs/scene_pose/pose_only
-  exp_dir: ${data.exp_root_dir}/${data.name}/${data.scene}/${data.id}
+  exp_root: runs/scene_pose/pose_only2
+  exp_dir: ${data.exp_root}/${data.name}/${data.scene}/${data.id}
   transform_fp: ${data.exp_dir}/transform.json
-  scene_transform_fp: ${data.exp_root_dir}/${data.name}/${data.scene}/scene_transform.json
+  scene_transform_fp: ${data.exp_root}/${data.name}/${data.scene}/scene_transform.json
 
   # nvs exp
-  # Can be different from exp_root_dir. e.g. Share pose with another exp.
-  nvs_root_dir: ${data.exp_root_dir}
-  nvs_dir: ${data.nvs_root_dir}/${data.name}/${data.scene}
+  # Can be different from exp_root. e.g. Share pose with another exp.
+  nvs_root: ${data.exp_root}
+  nvs_dir: ${data.nvs_root}/${data.name}/${data.scene}
   lora_ckpt_fp: ${data.nvs_dir}/lora.ckpt
   demo_fp:  ${data.nvs_dir}/demo.png
 

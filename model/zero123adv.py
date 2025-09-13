@@ -115,8 +115,8 @@ class Zero123adv(Zero123, nn.Module):
         cond1["c_concat"] = [input_mask * self.model.encode_first_stage(image_cond1).mode().detach()]
         cond2["c_concat"] = [input_mask * self.model.encode_first_stage(image_cond2).mode().detach()]
         # endregion
-        ddpm_step = default(ddpm_step, torch.randint(low=0, high=self.model.num_timesteps, size=(1,)).item())
-        # step = 50
+        # ddpm_step = default(ddpm_step, torch.randint(low=0, high=self.model.num_timesteps, size=(1,)).item())
+        ddpm_step = 50
         ddim_step = (ddpm_step * max_ddim_steps) // self.model.num_timesteps
         t = torch.full((target_latent.shape[0],), ddpm_step, device=self.model.device).long()
 

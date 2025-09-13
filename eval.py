@@ -6,7 +6,6 @@ import torch
 import numpy as np
 
 from dataset.base import load_frames
-from util.criterion import lpips_fn, pose_err_fn, psnr_fn, ssim_fn
 from util.util import load_config, load_image, set_random_seed, str2list
 from util.pose import mat2latlon
 
@@ -16,6 +15,7 @@ from PIL import Image
 from pytorch3d import io
 
 def eval_pose(scene_transform_fp, transform_fp, gt_transform_fp, image_dir, id, **kwargs):
+    from util.criterion import pose_err_fn
     gt_camtoworlds = load_frames(image_dir, gt_transform_fp, verbose=False)[1]
     if scene_transform_fp:
         camtoworlds = load_frames(image_dir, scene_transform_fp, verbose=False, return_images=True)[1]
@@ -28,7 +28,8 @@ def eval_pose(scene_transform_fp, transform_fp, gt_transform_fp, image_dir, id, 
     return pose_err
 
 def eval_nvs(demo_fp, test_image_dir, test_transform_fp, **kwargs)->tuple[float,float,float]:
-    pred = load_image(demo_fp, resize=False, to_clip=False)
+    from util.criterion import lpips_fn, psnr_fn, ssim_fn
+    pred = load_image(demo_fp, resize=False, to_clip=False, verbose=False)
     pred = torch.cat(torch.chunk(pred, 8, dim=-1))
     gt = load_frames(test_image_dir, test_transform_fp, to_clip=False, verbose=False)[0]
     gt = gt.to(pred.device)
@@ -78,7 +79,7 @@ def eval_consistency(met3r_eval, nvs_dir, demo_fp, **kwargs):
     np.set_printoptions(precision=3, suppress=None, floatmode='fixed')
     print(f'consistency score: {score.cpu().numpy()}')
     print(f'median: {score.median().item():.3f}, mean: {score.mean().item():.3f}')
-    return score.mean().item()#, score.median().item()
+    return score
 
 def eval_pose_all(config, scenes, ids, wb_run):
     metric = []
@@ -98,7 +99,7 @@ def eval_pose_all(config, scenes, ids, wb_run):
     # print(f"[INFO] metric shape: {len(metric)} x {metric[0].shape}")
     metric = np.concatenate(metric, axis=0)
     # print(f"[INFO] metric shape after:  {metric.shape}")
-    np.savez(f"{config.data.exp_root_dir}/pose_{config.data.name}.npz", metric)
+    np.savez(f"{config.data.exp_root}/pose_{config.data.name}.npz", metric)
     if wb_run:
         rot_p25, rot_p50, rot_p75 = np.percentile(metric[:, 0], [25, 50, 75])
         trans_p25, trans_p50, trans_p75 = np.percentile(metric[:, 1], [25, 50, 75])
@@ -123,7 +124,7 @@ def eval_nvs_all(config, scenes, ids, wb_run):
             config.data.id = id
             metric.append(eval_nvs(**config.data))
     metric = np.array(metric)
-    np.savez(f"{config.data.exp_root_dir}/nvs_{config.data.name}.npz", metric)
+    np.savez(f"{config.data.exp_root}/nvs_{config.data.name}.npz", metric)
     if wb_run:
         PSNR_p25, PSNR_p50, PSNR_p75    = np.percentile(metric[:, 0], [25, 50, 75])
         SSIM_p25, SSIM_p50, SSIM_p75    = np.percentile(metric[:, 1], [25, 50, 75])
@@ -170,8 +171,8 @@ def eval_consistency_all(config, scenes, ids, wb_run):
             consistency_score = eval_consistency(met3r_eval, **config.data)
 
             consistency_metric.append(consistency_score)
-    consistency_metric = np.array(consistency_metric)
-    np.savez(f"{config.data.exp_root_dir}/consistency_{config.data.name}.npz", consistency_metric)
+    consistency_metric = np.concatenate(consistency_metric, axis=0)
+    np.savez(f"{config.data.exp_root}/consistency_{config.data.name}.npz", consistency_metric)
     MEt3R_mean = np.mean(consistency_metric[:])
     if wb_run:
         MEt3R_p25, MEt3R_p50, MEt3R_p75 = np.percentile(consistency_metric[:], [25, 50, 75])
@@ -238,8 +239,10 @@ if __name__ == "__main__":
     parser.add_argument('-c', "--consistency", action="store_true")
     parser.add_argument('-p', "--pose", action="store_true")
     parser.add_argument('-n', "--nvs", action="store_true")
+    parser.add_argument('-g', '--gpu_id', type=str, default='4')
     args, extras = parser.parse_known_args()
     config = load_config(args.config, cli_args=extras)
     
     set_random_seed(config[0].seed)
+    os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu_id
     main(config, [args.pose, args.nvs, args.consistency])

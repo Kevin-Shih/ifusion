@@ -23,13 +23,13 @@ data:
   test_transform_fp: ${data.root_dir}/${data.name}/${data.scene}/test/transform.json
 
   # pose exp
-  exp_root_dir: exp
-  exp_dir: ${data.exp_root_dir}/${data.name}/${data.scene}/${data.id}
+  exp_root: exp
+  exp_dir: ${data.exp_root}/${data.name}/${data.scene}/${data.id}
   transform_fp: ${data.exp_dir}/transform.json
   scene_transform_fp: null
 
   # nvs exp
-  nvs_root_dir: ${data.exp_root_dir}
+  nvs_root_dir: ${data.exp_root}
   nvs_dir: ${data.nvs_root_dir}/${data.name}/${data.scene}
   lora_ckpt_fp: ${data.nvs_dir}/lora.ckpt
   demo_fp:  ${data.nvs_dir}/demo.png

@@ -160,12 +160,13 @@ class MyFinetuneAllSceneIterableDataset(IterableDataset, MyFinetuneGeneralDatase
     def __init__(self, num_scenes):
         super().__init__(num_scenes)
 
-    def add_scenes(self, image_dir, transform_fp):
-        if 'scene' in transform_fp:
-            print(f"[INFO] Load whole scene from {transform_fp}")
-        else:
-            print(f"[INFO] Load id[0,1] from {transform_fp}")
-        images, camtoworlds, _ = load_frames(image_dir, transform_fp) # k, C, H, W and k, 4, 4
+    def add_scenes(self, image_dir, transform_fp, verbose=True):
+        if verbose:
+            if 'scene' in transform_fp:
+                print(f"[INFO] Load whole scene from {transform_fp}")
+            else:
+                print(f"[INFO] Load id[0,1] from {transform_fp}")
+        images, camtoworlds, _ = load_frames(image_dir, transform_fp, verbose=verbose) # k, C, H, W and k, 4, 4
 
         assert len(images) == len(camtoworlds)
         assert images.shape[2:] == (256, 256)
