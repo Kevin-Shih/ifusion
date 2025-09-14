@@ -44,7 +44,6 @@ def eval_nvs(demo_fp, test_image_dir, test_transform_fp, **kwargs) -> tuple[floa
 
 
 def eval_consistency(met3r_eval, nvs_dir, demo_fp, **kwargs):
-    # Prepare inputs of shape (batch, views, channels, height, width): views must be 2
     # RGB range must be in [-1, 1], input shape B, k=2, c=3, 256, 256
     imgs = load_image(demo_fp, resize=False)
     imgs = torch.cat(torch.chunk(imgs, 8, dim=-1))
@@ -62,8 +61,6 @@ def eval_consistency(met3r_eval, nvs_dir, demo_fp, **kwargs):
     )
 
     # pcloud : (B-1) * 2 point clouds. Each image pair has 2 point clouds (left and right)
-    # if met3r_eval.distance == 'cosine':
-    #     print(f'[INFO] Save pointclouds without color')
     eval_out_dir = f'{nvs_dir}/eval/'
     os.makedirs(eval_out_dir, exist_ok=True)
     for i in range(score_map.shape[0]):
@@ -73,9 +70,7 @@ def eval_consistency(met3r_eval, nvs_dir, demo_fp, **kwargs):
         masked_score_map = (score_rgb * mask_rgb * 255).cpu().numpy()
 
         Image.fromarray(masked_score_map.astype(np.uint8)).save(f'{eval_out_dir}/score_map_masked_{i},{i+1}.png')
-        # Image.fromarray((mask[i].clamp(0,1).cpu().numpy() * 255).astype(np.uint8)).save(f'{eval_out_dir}/mask_{i},{i+1}.png')
-        if met3r_eval.distance == 'cosine':
-            # no colors is met3r choose cosine distance as metric
+        if met3r_eval.distance == 'cosine': # if choose cosine distance in met3r, pointclouds has no color
             io.save_ply(f'{eval_out_dir}/pointcloud_{i},{i+1}_l.ply', pcloud.points_list()[i * 2])
             io.save_ply(f'{eval_out_dir}/pointcloud_{i},{i+1}_r.ply', pcloud.points_list()[i * 2 + 1])
         else:
@@ -83,9 +78,10 @@ def eval_consistency(met3r_eval, nvs_dir, demo_fp, **kwargs):
             io.IO().save_pointcloud(pcloud[i * 2 + 1], f'{eval_out_dir}/pointcloud_{i},{i+1}_r.ply')
 
     np.set_printoptions(precision=3, suppress=None, floatmode='fixed')
-    print(f'consistency score: {score.cpu().numpy()}')
-    print(f'median: {score.median().item():.3f}, mean: {score.mean().item():.3f}')
-    return score.cpu().numpy()
+    score: np.ndarray = score.cpu().numpy()
+    print(f'consistency score: {score}')
+    print(f'median: {np.median(score):.3f}, mean: {score.mean():.3f}')
+    return score   #.mean()
 
 
 def eval_pose_all(config, scenes, ids, wb_run: Optional[wandb.Run]):
