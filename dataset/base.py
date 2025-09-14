@@ -11,12 +11,12 @@ from util.util import load_image
 
 
 def load_frames(
-    image_dir: str = None,
-    transform_fp: str = None,
+    image_dir: str = "",
+    transform_fp: str = "",
     return_images=True,
     to_clip=True,
     verbose=True,
-):
+) -> tuple[Tensor, Tensor, Tensor]:
     """Load images from disk."""
     if not transform_fp.startswith("/"):
         # allow relative path
@@ -37,16 +37,12 @@ def load_frames(
 
         if return_images:
             fp = os.path.join(image_dir, frame["file_path"])
-            all_images.append(
-                load_image(fp, device="cpu", to_clip=to_clip, verbose=verbose)
-            )
+            all_images.append(load_image(fp, device="cpu", to_clip=to_clip, verbose=verbose))
 
         all_camtoworlds.append(torch.tensor([frame["transform_matrix"]]))
         all_latlons.append(torch.tensor([frame["latlon"]]))
 
-    if return_images:
-        all_images = torch.cat(all_images)
-
+    all_images = torch.cat(all_images)
     all_camtoworlds = torch.cat(all_camtoworlds)
     all_latlons = torch.cat(all_latlons)
 
@@ -54,6 +50,7 @@ def load_frames(
 
 
 class BaseDataset:
+
     def setup(self, image_dir, transform_fp):
         self.all_images, self.all_camtoworlds, _ = load_frames(image_dir, transform_fp)
 
@@ -65,11 +62,9 @@ class BaseDataset:
 
     def get_trans(self, target_camtoworld, cond_camtoworld, in_T=True, verbose=False):
         """Returns the relative transformation from cond to target"""
-        rel_latlon = mat2latlon(target_camtoworld, return_radius=True) - mat2latlon(
-            cond_camtoworld, return_radius=True
-        )
+        rel_latlon = mat2latlon(target_camtoworld, return_radius=True) - mat2latlon(cond_camtoworld, return_radius=True)
         rel_latlon = rel_latlon.squeeze(0)
-        rel_latlon[1] = (rel_latlon[1] + np.pi) % (2 * np.pi) - np.pi  # [-pi, pi]
+        rel_latlon[1] = (rel_latlon[1] + np.pi) % (2 * np.pi) - np.pi # [-pi, pi]
 
         if verbose:
             print(
@@ -95,9 +90,6 @@ class BaseDataset:
 
     def get_nearest(self, target_camtoworld):
         """Returns the nearest frame to target"""
-        distances = [
-            self.get_distance(target_camtoworld, cond_camtoworld)
-            for cond_camtoworld in self.all_camtoworlds
-        ]
+        distances = [self.get_distance(target_camtoworld, cond_camtoworld) for cond_camtoworld in self.all_camtoworlds]
         nearest_idx = torch.argmin(torch.tensor(distances))
         return nearest_idx

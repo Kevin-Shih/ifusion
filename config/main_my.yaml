@@ -83,7 +83,7 @@ finetune:
     batch_size: 8
     consist_loss_ratio: 2
     pred_loss_ratio: 1
-    ddpm_steps: 300
+    ddpm_steps: 500
     optimizer:
       name: Adam
       args:

@@ -20,6 +20,7 @@ from util.util import default
 
 
 class Zero123(nn.Module):
+
     @dataclass
     class Config:
         pretrained_model_name_or_path: str = "ldm/ckpt/zero123-xl.ckpt"
@@ -73,9 +74,7 @@ class Zero123(nn.Module):
         print("[INFO] Loaded Zero123")
 
     @torch.amp.autocast('cuda', enabled=False)
-    def set_min_max_steps(
-        self, min_step_percent: float = 0.02, max_step_percent: float = 0.98
-    ):
+    def set_min_max_steps(self, min_step_percent: float = 0.02, max_step_percent: float = 0.98):
         self.min_step = int(self.num_train_timesteps * min_step_percent)
         self.max_step = int(self.num_train_timesteps * max_step_percent)
 
@@ -89,14 +88,10 @@ class Zero123(nn.Module):
         return c_crossattn, c_concat
 
     @torch.amp.autocast('cuda', enabled=False)
-    def encode_image(
-        self, image: Float[Tensor, "B 3 256 256"]
-    ) -> Float[Tensor, "B 4 32 32"]:
+    def encode_image(self, image: Float[Tensor, "B 3 256 256"]) -> Float[Tensor, "B 4 32 32"]:
         input_dtype = image.dtype
-        latent = self.model.get_first_stage_encoding(
-            self.model.encode_first_stage(image.to(self.weights_dtype))
-        )
-        return latent.to(input_dtype)  # [B, 4, 32, 32] Latent space image
+        latent = self.model.get_first_stage_encoding(self.model.encode_first_stage(image.to(self.weights_dtype)))
+        return latent.to(input_dtype) # [B, 4, 32, 32] Latent space image
 
     @torch.amp.autocast('cuda', enabled=False)
     def decode_latent(
@@ -135,10 +130,7 @@ class Zero123(nn.Module):
         target_replace_module: List[str] = ["CrossAttention", "GEGLU"],
         eval: bool = False,
     ):
-        print(
-            f"[INFO] Injecting LoRA from "
-            + (str(ckpt_fp) if ckpt_fp is not None else "scratch"),
-        )
+        print(f"[INFO] Injecting LoRA from " + (str(ckpt_fp) if ckpt_fp is not None else "scratch"),)
 
         lora_params, _ = inject_trainable_lora_extended(
             self.model.model,
@@ -190,11 +182,12 @@ class Zero123(nn.Module):
         if len(image) != len(theta):
             image = image.repeat(len(theta), 1, 1, 1)
         c_crossattn, c_concat = self.get_image_embeds(image)
-        c_crossattn = self.clip_camera_projection(
-            theta, azimuth, distance, c_crossattn, in_deg
-        )
+        c_crossattn = self.clip_camera_projection(theta, azimuth, distance, c_crossattn, in_deg)
         out = self.gen_from_cond(
-            cond={"c_crossattn": c_crossattn, "c_concat": c_concat},
+            cond={
+                "c_crossattn": c_crossattn,
+                "c_concat": c_concat
+            },
             scale=scale,
             ddim_steps=ddim_steps,
             ddim_eta=ddim_eta,
@@ -214,14 +207,15 @@ class Zero123(nn.Module):
     ):
         c_crossattn, c_concat = zip(*[self.get_image_embeds(x) for x in image])
         c_crossattn, c_concat = torch.stack(c_crossattn), torch.stack(c_concat)
-        c_crossattn = torch.stack(
-            [
-                self.clip_camera_projection(t, a, d, c, in_deg)
-                for t, a, d, c in zip(theta, azimuth, distance, c_crossattn)
-            ]
-        )
+        c_crossattn = torch.stack([
+            self.clip_camera_projection(t, a, d, c, in_deg)
+            for t, a, d, c in zip(theta, azimuth, distance, c_crossattn)
+        ])
         out = self.gen_from_cond(
-            cond={"c_crossattn": c_crossattn, "c_concat": c_concat},
+            cond={
+                "c_crossattn": c_crossattn,
+                "c_concat": c_concat
+            },
             scale=scale,
             ddim_steps=ddim_steps,
             ddim_eta=ddim_eta,
@@ -245,9 +239,7 @@ class Zero123(nn.Module):
         return out
 
     @torch.no_grad()
-    def gen_from_cond(
-        self, cond, scale=3, ddim_steps=50, ddim_eta=1, use_multi_view_condition=False
-    ):
+    def gen_from_cond(self, cond, scale=3, ddim_steps=50, ddim_eta=1, use_multi_view_condition=False):
         B = len(cond["c_crossattn"])
         if use_multi_view_condition:
             N = len(cond["c_crossattn"][0])
@@ -255,7 +247,7 @@ class Zero123(nn.Module):
         latent = torch.randn((B, 4, 32, 32), device=self.device)
         self.scheduler.set_timesteps(ddim_steps)
 
-        cond_ = None  # temporary condition
+        cond_ = None # temporary condition
         for t in self.scheduler.timesteps:
             x_in = torch.cat([latent] * 2)
             t_in = torch.cat([t.reshape(1).repeat(B)] * 2).to(self.device)
@@ -273,13 +265,9 @@ class Zero123(nn.Module):
 
             noise_pred = self.model.apply_model(x_in, t_in, cond_)
             noise_pred_uncond, noise_pred_cond = noise_pred.chunk(2)
-            noise_pred = noise_pred_uncond + scale * (
-                noise_pred_cond - noise_pred_uncond
-            )
+            noise_pred = noise_pred_uncond + scale * (noise_pred_cond - noise_pred_uncond)
 
-            latent = self.scheduler.step(noise_pred, t, latent, eta=ddim_eta)[
-                "prev_sample"
-            ]
+            latent = self.scheduler.step(noise_pred, t, latent, eta=ddim_eta)["prev_sample"]
         images = self.decode_latent(latent)
 
         return images

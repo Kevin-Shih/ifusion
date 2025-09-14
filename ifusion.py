@@ -8,13 +8,13 @@ from tqdm import trange
 from glob import glob
 from liegroups.torch import SE3
 
-
 from dataset.finetune import FinetuneIterableDataset, MyFinetuneIterableDataset, MyFinetuneAllSceneIterableDataset
 from dataset.inference import MultiImageInferenceDataset, SingleImageInferenceDataset
 from util.pose import latlon2mat, make_T, mat2latlon
 from util.typing import *
 from util.util import load_image, parse_optimizer, parse_scheduler, str2list
 from util.viz import plot_image
+
 
 def dualway_optimize_pose_loop(
     model,
@@ -46,21 +46,22 @@ def dualway_optimize_pose_loop(
             theta, azimuth = latlon[0], latlon[1]
             distance = (
                 torch.sin(torch.norm(T_[:3, 3]) - default_radius) * search_radius_range
-                # torch.clamp(torch.norm(T_[:3, 3]) - default_radius,min= -search_radius_range, max= search_radius_range)
-                # torch.norm(T_[:3, 3]) - default_radius
-            ) # distance is the offset from the default radius, but why sin and times scale?
+                                                                                        # torch.clamp(torch.norm(T_[:3, 3]) - default_radius,min= -search_radius_range, max= search_radius_range)
+                                                                                        # torch.norm(T_[:3, 3]) - default_radius
+            )                                                                           # distance is the offset from the default radius, but why sin and times scale?
 
             # idx = [0, 1] if torch.rand(1) < 0.5 else [1, 0] # on every step randomly choose train r2q or q2r. Why not both?
-            idx = [0, 1]  # on every step randomly choose train r2q or q2r. Why not both?
+            idx = [0, 1]                                     # on every step randomly choose train r2q or q2r. Why not both?
             batch = {
-                "image_cond": image_cond[idx],
-                "image_target": image_target[idx],
-                "T": torch.stack(
-                    (
+                "image_cond":
+                    image_cond[idx],
+                "image_target":
+                    image_target[idx],
+                "T":
+                    torch.stack((
                         make_T(theta, azimuth, distance),
                         make_T(-theta, -azimuth, -distance),
-                    )
-                )[idx].to(model.device),
+                    ))[idx].to(model.device),
             }
 
             if use_step_ratio:
@@ -71,14 +72,15 @@ def dualway_optimize_pose_loop(
             # region inv_batch
             idx = [1, 0]
             batch = {
-                "image_cond": image_cond[idx],
-                "image_target": image_target[idx],
-                "T": torch.stack(
-                    (
+                "image_cond":
+                    image_cond[idx],
+                "image_target":
+                    image_target[idx],
+                "T":
+                    torch.stack((
                         make_T(theta, azimuth, distance),
                         make_T(-theta, -azimuth, -distance),
-                    )
-                )[idx].to(model.device),
+                    ))[idx].to(model.device),
             }
 
             if use_step_ratio:
@@ -91,11 +93,12 @@ def dualway_optimize_pose_loop(
             pbar.set_description(
                 f"lr: {scheduler.get_last_lr()[0]:.3f}, total_loss: {total_loss:.3f}, loss: {loss.item():.2f}, theta: {theta.rad2deg().item():.2f}, azimuth: {azimuth.rad2deg().item():.2f}, distance: {distance.item():.2f}"
             )
-            (loss+inv_loss).backward()
+            (loss + inv_loss).backward()
             optimizer.step()
             scheduler.step(total_loss)
 
     return total_loss, theta, azimuth, distance
+
 
 def original_optimize_pose_loop(
     model,
@@ -125,20 +128,19 @@ def original_optimize_pose_loop(
 
             latlon = mat2latlon(T_).squeeze()
             theta, azimuth = latlon[0], latlon[1]
-            distance = (
-                torch.sin(torch.norm(T_[:3, 3]) - default_radius) * search_radius_range
-            )
+            distance = (torch.sin(torch.norm(T_[:3, 3]) - default_radius) * search_radius_range)
 
             idx = [0, 1] if torch.rand(1) < 0.5 else [1, 0]
             batch = {
-                "image_cond": image_cond[idx],
-                "image_target": image_target[idx],
-                "T": torch.stack(
-                    (
+                "image_cond":
+                    image_cond[idx],
+                "image_target":
+                    image_target[idx],
+                "T":
+                    torch.stack((
                         make_T(theta, azimuth, distance),
                         make_T(-theta, -azimuth, -distance),
-                    )
-                )[idx].to(model.device),
+                    ))[idx].to(model.device),
             }
 
             if use_step_ratio:
@@ -157,6 +159,7 @@ def original_optimize_pose_loop(
             scheduler.step(total_loss)
 
     return total_loss, theta, azimuth, distance
+
 
 def optimize_pose_pair(
     model,
@@ -185,22 +188,18 @@ def optimize_pose_pair(
             **kwargs,
         )
 
-        results.append(
-            (
-                total_loss.item(),
-                theta.rad2deg().item(),
-                azimuth.rad2deg().item(),
-                distance.item(),
-            )
-        )
+        results.append((
+            total_loss.item(),
+            theta.rad2deg().item(),
+            azimuth.rad2deg().item(),
+            distance.item(),
+        ))
 
     results = torch.tensor(results)
     best_idx = torch.argmin(results[:, 0])
     pred_pose = results[best_idx][1:]
     pred_loss = results[best_idx][0]
-    print(
-        f"[INFO] Best pose: theta: {pred_pose[0]:.2f}, azimuth: {pred_pose[1]:.2f}, distance: {pred_pose[2]:.2f}"
-    )
+    print(f"[INFO] Best pose: theta: {pred_pose[0]:.2f}, azimuth: {pred_pose[1]:.2f}, distance: {pred_pose[2]:.2f}")
 
     return pred_pose, pred_loss.item()
 
@@ -223,35 +222,27 @@ def optimize_pose(
     qry_images = [load_image(image_fps[i]) for i in id[1:]]
 
     out_dict = {"camera_angle_x": np.deg2rad(49.1), "frames": []}
-    out_dict["frames"].append(
-        {
-            "file_path": image_fps[0].replace(image_dir + "/", ""),
-            "transform_matrix": latlon2mat(torch.tensor([default_latlon])).squeeze(0).tolist(),
-            "latlon": list(default_latlon),
-        }
-    )
+    out_dict["frames"].append({
+        "file_path": image_fps[0].replace(image_dir + "/", ""),
+        "transform_matrix": latlon2mat(torch.tensor([default_latlon])).squeeze(0).tolist(),
+        "latlon": list(default_latlon),
+    })
     if len(transform_dict["frames"]) == 0:
-        transform_dict["frames"].append(
-        {
+        transform_dict["frames"].append({
             "file_path": image_fps[0].replace(image_dir + "/", ""),
             "transform_matrix": latlon2mat(torch.tensor([default_latlon])).squeeze(0).tolist(),
             "latlon": list(default_latlon),
             "loss": 0.0,
-        }
-    )
+        })
     for qry_idx, qry_image in zip(id[1:], qry_images):
         assert ref_image.shape == qry_image.shape
-        pose, loss = optimize_pose_pair(
-            model=model, ref_image=ref_image, qry_image=qry_image, **kwargs
-        )
+        pose, loss = optimize_pose_pair(model=model, ref_image=ref_image, qry_image=qry_image, **kwargs)
         pose = np.add(default_latlon, pose.unsqueeze(0))
-        out_dict["frames"].append(
-            {
-                "file_path": image_fps[qry_idx].replace(image_dir + "/", ""),
-                "transform_matrix": latlon2mat(pose.clone()).squeeze(0).tolist(),
-                "latlon": pose.squeeze().tolist(),
-            }
-        )
+        out_dict["frames"].append({
+            "file_path": image_fps[qry_idx].replace(image_dir + "/", ""),
+            "transform_matrix": latlon2mat(pose.clone()).squeeze(0).tolist(),
+            "latlon": pose.squeeze().tolist(),
+        })
         if qry_idx < len(transform_dict["frames"]):
             if qry_idx != 0 and transform_dict["frames"][qry_idx]["loss"] > loss:
                 transform_dict["frames"][qry_idx] = {
@@ -261,14 +252,12 @@ def optimize_pose(
                     "loss": loss,
                 }
         else:
-            transform_dict["frames"].append(
-                {
-                    "file_path": image_fps[qry_idx].replace(image_dir + "/", ""),
-                    "transform_matrix": latlon2mat(pose.clone()).squeeze(0).tolist(),
-                    "latlon": pose.squeeze().tolist(),
-                    "loss": loss,
-                }
-            )
+            transform_dict["frames"].append({
+                "file_path": image_fps[qry_idx].replace(image_dir + "/", ""),
+                "transform_matrix": latlon2mat(pose.clone()).squeeze(0).tolist(),
+                "latlon": pose.squeeze().tolist(),
+                "loss": loss,
+            })
 
     # save poses to json
     os.makedirs(os.path.dirname(transform_fp), exist_ok=True)
@@ -315,6 +304,7 @@ def finetune(
     model.save_lora(lora_ckpt_fp)
     model.remove_lora()
 
+
 def my_finetune(
     model,
     image_dir: str,
@@ -341,12 +331,18 @@ def my_finetune(
             batch = next(train_loader)
             batch = {k: v.to(model.device) for k, v in batch.items()}
             noise_a, noise_b, noise, nvs_latent_a, nvs_latent_b = model(batch, ddpm_step=args.get('ddpm_steps', None))
-            consist_loss    = torch.nn.functional.mse_loss(noise_a, noise_b, reduction='mean') # or cosine?
-            noise_pred_loss = torch.nn.functional.mse_loss(noise_a, noise, reduction='mean') + torch.nn.functional.mse_loss(noise_b, noise, reduction='mean')
-            consist_loss    = args.consist_loss_ratio * consist_loss
+            consist_loss = torch.nn.functional.mse_loss(noise_a, noise_b, reduction='mean')                                       # or cosine?
+            noise_pred_loss = torch.nn.functional.mse_loss(
+                noise_a, noise, reduction='mean'
+            ) + torch.nn.functional.mse_loss(
+                noise_b, noise, reduction='mean'
+            )
+            consist_loss = args.consist_loss_ratio * consist_loss
             noise_pred_loss = args.pred_loss_ratio * noise_pred_loss
             loss = consist_loss + noise_pred_loss
-            pbar.set_description(f"step: {step}, loss: {loss.item():.4f}, c_loss: {consist_loss.item():.4f}, p_loss: {noise_pred_loss.item():.4f}")
+            pbar.set_description(
+                f"step: {step}, loss: {loss.item():.4f}, c_loss: {consist_loss.item():.4f}, p_loss: {noise_pred_loss.item():.4f}"
+            )
             loss.backward()
 
             optimizer.step()
@@ -356,6 +352,7 @@ def my_finetune(
     os.makedirs(os.path.dirname(lora_ckpt_fp), exist_ok=True)
     model.save_lora(lora_ckpt_fp)
     model.remove_lora()
+
 
 def my_finetune_general(
     model,
@@ -370,7 +367,7 @@ def my_finetune_general(
         rank=config.finetune.lora_rank,
         target_replace_module=config.finetune.lora_target_replace_module,
     )
-    
+
     # rand scenes index -> batch size scene
     # rand ids index -> 1 for all scene (2 index, 1 for ref., 1 for target)
     # run model from another ids (same scene, same target) to get the loss
@@ -398,9 +395,13 @@ def my_finetune_general(
             batch = next(train_loader)
             batch = {k: v.to(model.device) for k, v in batch.items()}
             noise_a, noise_b, noise, nvs_latent_a, nvs_latent_b = model(batch)
-            consist_loss    = torch.nn.functional.mse_loss(noise_a, noise_b, reduction='mean')
-            noise_pred_loss = torch.nn.functional.mse_loss(noise_a, noise, reduction='mean') + torch.nn.functional.mse_loss(noise_b, noise, reduction='mean')
-            # region      commented      
+            consist_loss = torch.nn.functional.mse_loss(noise_a, noise_b, reduction='mean')
+            noise_pred_loss = torch.nn.functional.mse_loss(
+                noise_a, noise, reduction='mean'
+            ) + torch.nn.functional.mse_loss(
+                noise_b, noise, reduction='mean'
+            )
+            # region      commented
             # if step%5==0:
             #     image1 = model.decode_latent(nvs_latent_a).detach()[0]
             #     image2 = model.decode_latent(nvs_latent_b).detach()[0]
@@ -409,52 +410,57 @@ def my_finetune_general(
             #     Image.fromarray((image2.permute(1,2,0).cpu().numpy() * 255).astype(np.uint8)).save(f'{exp_dir}/decode_img2_{step}.png')
 
             # score, mask, score_map,_ = met3r_eval(
-            #     images=inputs, 
-            #     return_overlap_mask=True, # Default 
-            #     return_score_map=True, # Default 
-            #     return_projections=True # Default 
+            #     images=inputs,
+            #     return_overlap_mask=True, # Default
+            #     return_score_map=True, # Default
+            #     return_projections=True # Default
             # )
             # loss += torch.nn.functional.mse_loss(nvs_latent_b, noise, reduction='mean')
             # loss = inconsistency(nvs_latent_a, nvs_latent_b) # l2 or met3r
             # endregion
-            consist_loss    *= args.consist_loss_ratio
+            consist_loss *= args.consist_loss_ratio
             noise_pred_loss *= args.pred_loss_ratio
             loss = consist_loss + noise_pred_loss
             loss.backward()
-            pbar.set_description(f"step: {step}, loss: {loss.item():.4f}, c_loss: {consist_loss.item():.4f}, p_loss: {noise_pred_loss.item():.4f}")
+            pbar.set_description(
+                f"step: {step}, loss: {loss.item():.4f}, c_loss: {consist_loss.item():.4f}, p_loss: {noise_pred_loss.item():.4f}"
+            )
             if wb_run:
                 wb_run.log({
                     "train/loss": loss.item(),
                     "train/consist_loss": consist_loss.item(),
                     "train/noise_pred_loss": noise_pred_loss.item(),
                     "train/lr": scheduler.get_last_lr()[0],
-                }, step=step+1)
+                },
+                           step=step + 1)
 
             optimizer.step()
             # scheduler.step()
             scheduler.step(loss)
-            if step % 50== 49:
+            if step % 50 == 49:
                 lora_ckpt_fp = f'{config.data.nvs_root}/{config.data.name}/lora/lora_{step + 1}.ckpt'
                 metric = ckpt_infer_and_eval(model, config, scenes, ids, lora_ckpt_fp=lora_ckpt_fp)
                 if wb_run:
-                    PSNR_mean  = np.mean(metric[:, 0])
-                    SSIM_mean  = np.mean(metric[:, 1])
+                    PSNR_mean = np.mean(metric[:, 0])
+                    SSIM_mean = np.mean(metric[:, 1])
                     LPIPS_mean = np.mean(metric[:, 2])
                     wb_run.log({
-                        "eval/PSNR":  PSNR_mean,
-                        "eval/SSIM":  SSIM_mean,
+                        "eval/PSNR": PSNR_mean,
+                        "eval/SSIM": SSIM_mean,
                         "eval/LPIPS": LPIPS_mean,
-                    }, step=step+1)
+                    },
+                               step=step + 1)
     model.save_lora(config.data.lora_ckpt_fp)
-    if  remove_lora:
+    if remove_lora:
         model.remove_lora()
+
 
 def ckpt_infer_and_eval(model, config, scenes, ids, lora_ckpt_fp):
     os.makedirs(os.path.dirname(lora_ckpt_fp), exist_ok=True)
     print()
     model.save_lora(lora_ckpt_fp)
     print(f"[INFO] Evaluating 1/10 scenes")
-    metric=[]
+    metric = []
     # config.data.lora_ckpt_fp = lora_ckpt_fp
     from eval import eval_nvs
     for scene in scenes[::10]: # infer 1/10 scenes
@@ -465,6 +471,7 @@ def ckpt_infer_and_eval(model, config, scenes, ids, lora_ckpt_fp):
             metric.append(eval_nvs(**config.data))
     metric = np.array(metric)
     return metric
+
 
 def inference(
     model,
@@ -497,7 +504,12 @@ def inference(
         generate_fn = model.generate_from_tensor
 
     test_dataset = test_dataset(
-        image_dir=image_dir, transform_fp=transform_fp, test_transform_fp=test_transform_fp, n_views=n_views, theta=theta, radius=radius
+        image_dir=image_dir,
+        transform_fp=transform_fp,
+        test_transform_fp=test_transform_fp,
+        n_views=n_views,
+        theta=theta,
+        radius=radius
     )
     test_loader = test_dataset.loader(args.batch_size)
     for batch in test_loader:
@@ -519,6 +531,7 @@ def inference(
     print(f"[INFO] Saved image to {demo_fp}")
 
     return out
+
 
 def inference_all(
     model,
@@ -544,7 +557,12 @@ def inference_all(
         generate_fn = model.generate_from_tensor
 
     test_dataset = test_dataset(
-        image_dir=image_dir, transform_fp=transform_fp, test_transform_fp=test_transform_fp, n_views=n_views, theta=theta, radius=radius
+        image_dir=image_dir,
+        transform_fp=transform_fp,
+        test_transform_fp=test_transform_fp,
+        n_views=n_views,
+        theta=theta,
+        radius=radius
     )
     test_loader = test_dataset.loader(args.batch_size)
     for batch in test_loader:

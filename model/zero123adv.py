@@ -19,7 +19,9 @@ from util.typing import *
 from util.util import default
 from model.zero123 import Zero123
 
+
 class Zero123adv(Zero123, nn.Module):
+
     def configure(self) -> None:
         print("[INFO] Loading Zero123adv...")
 
@@ -81,7 +83,7 @@ class Zero123adv(Zero123, nn.Module):
         # To support classifier-free guidance, randomly drop out only text conditioning 5%, only image conditioning 5%, and both 5%.
         random = torch.rand(image_target.size(0), device=self.model.device)
         prompt_mask = rearrange(random < 2 * uncond, "n -> n 1 1")
-        input_mask = 1 - rearrange((random >= uncond).float() * (random < 3 * uncond).float(), "n -> n 1 1 1" )
+        input_mask = 1 - rearrange((random >= uncond).float() * (random < 3 * uncond).float(), "n -> n 1 1 1")
         # print(f'[INFO] image_target shape: {batch["image_target"].shape}, T1 shape: {batch["T1"].shape}, target_latent shape: {target_latent.shape}')
 
         # target_latent.shape: [8, 4, 64, 64]; c.shape: [8, 1, 768] b c3 h32 w32
