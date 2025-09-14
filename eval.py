@@ -88,7 +88,7 @@ def eval_consistency(met3r_eval, nvs_dir, demo_fp, **kwargs):
     return score.cpu().numpy()
 
 
-def eval_pose_all(config, scenes, ids, wb_run):
+def eval_pose_all(config, scenes, ids, wb_run: Optional[wandb.Run]):
     metric = []
     for scene in scenes:
         if config.data.scene_transform_fp:
@@ -113,22 +113,24 @@ def eval_pose_all(config, scenes, ids, wb_run):
     Recall15 = sum(metric[:, 0] <= 15) / len(metric)
     Recall30 = sum(metric[:, 0] <= 30) / len(metric)
     if wb_run:
-        wb_run.summary['Pose/Recall(<=5)'] = Recall5
-        wb_run.summary['Pose/Recall(<=15)'] = Recall15
-        wb_run.summary['Pose/Recall(<=30)'] = Recall30
-        wb_run.summary['Pose/Rot. error (p25)'] = rot_p25
-        wb_run.summary['Pose/Rot. error (median)'] = rot_p50
-        wb_run.summary['Pose/Rot. error (p75)'] = rot_p75
-        wb_run.summary['Pose/Trans. error (p25)'] = trans_p25
-        wb_run.summary['Pose/Trans. error (median)'] = trans_p50
-        wb_run.summary['Pose/Trans. error (p75)'] = trans_p75
+        wb_run.summary.update({
+            'Pose/Recall(<=5)': Recall5,
+            'Pose/Recall(<=15)': Recall15,
+            'Pose/Recall(<=30)': Recall30,
+            'Pose/Rot. error (p25)': rot_p25,
+            'Pose/Rot. error (median)': rot_p50,
+            'Pose/Rot. error (p75)': rot_p75,
+            'Pose/Trans. error (p25)': trans_p25,
+            'Pose/Trans. error (median)': trans_p50,
+            'Pose/Trans. error (p75)': trans_p75
+        })
     # NOTE: report the median error and recall < 5 degree
     print(
         f"Rot. error: {rot_p50:.3f}, Trans. error: {trans_p50:.3f}, Recall <=5: {Recall5:.3f}, Recall <=15: {Recall15:.3f}, Recall <=30: {Recall30:.3f}"
     )
 
 
-def eval_nvs_all(config, scenes, ids, wb_run):
+def eval_nvs_all(config, scenes, ids, wb_run: Optional[wandb.Run]):
     metric = []
     for scene in scenes:
         for id in ids:
@@ -143,18 +145,20 @@ def eval_nvs_all(config, scenes, ids, wb_run):
         SSIM_p25, SSIM_p50, SSIM_p75 = np.percentile(metric[:, 1], [25, 50, 75])
         LPIPS_p25, LPIPS_p50, LPIPS_p75 = np.percentile(metric[:, 2], [25, 50, 75])
         PSNR_mean, SSIM_mean, LPIPS_mean = np.mean(metric, axis=0)
-        wb_run.summary['NVS/PSNR (p25)'] = PSNR_p25
-        wb_run.summary['NVS/PSNR (median)'] = PSNR_p50
-        wb_run.summary['NVS/PSNR (p75)'] = PSNR_p75
-        wb_run.summary['NVS/SSIM (p25)'] = SSIM_p25
-        wb_run.summary['NVS/SSIM (median)'] = SSIM_p50
-        wb_run.summary['NVS/SSIM (p75)'] = SSIM_p75
-        wb_run.summary['NVS/LPIPS (p25)'] = LPIPS_p25
-        wb_run.summary['NVS/LPIPS (median)'] = LPIPS_p50
-        wb_run.summary['NVS/LPIPS (p75)'] = LPIPS_p75
-        wb_run.summary['NVS/PSNR  (mean)'] = PSNR_mean
-        wb_run.summary['NVS/SSIM  (mean)'] = SSIM_mean
-        wb_run.summary['NVS/LPIPS (mean)'] = LPIPS_mean
+        wb_run.summary.update({
+            'NVS/PSNR (p25)': PSNR_p25,
+            'NVS/PSNR (median)': PSNR_p50,
+            'NVS/PSNR (p75)': PSNR_p75,
+            'NVS/SSIM (p25)': SSIM_p25,
+            'NVS/SSIM (median)': SSIM_p50,
+            'NVS/SSIM (p75)': SSIM_p75,
+            'NVS/LPIPS (p25)': LPIPS_p25,
+            'NVS/LPIPS (median)': LPIPS_p50,
+            'NVS/LPIPS (p75)': LPIPS_p75,
+            'NVS/PSNR  (mean)': PSNR_mean,
+            'NVS/SSIM  (mean)': SSIM_mean,
+            'NVS/LPIPS (mean)': LPIPS_mean,
+        })
     print(f"PSNR: {metric[:, 0].mean():.3f}, SSIM: {metric[:, 1].mean():.3f}, LPIPS: {metric[:, 2].mean():.3f}")
 
 
