@@ -5,7 +5,7 @@ log:
   # group_name: 'scene0_all'
   group_name: 'all'
   run_name: 'FixedScene_my_2:1_100it_50step'
-  run_path: 92xg70go
+  run_path: 
 
 data:
   name: GSO # OO3D

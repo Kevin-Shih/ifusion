@@ -340,7 +340,7 @@ def my_finetune(
 
             batch = next(train_loader)
             batch = {k: v.to(model.device) for k, v in batch.items()}
-            noise_a, noise_b, noise, nvs_latent_a, nvs_latent_b = model(batch)
+            noise_a, noise_b, noise, nvs_latent_a, nvs_latent_b = model(batch, ddpm_step=args.get('ddpm_steps', None))
             consist_loss    = torch.nn.functional.mse_loss(noise_a, noise_b, reduction='mean') # or cosine?
             noise_pred_loss = torch.nn.functional.mse_loss(noise_a, noise, reduction='mean') + torch.nn.functional.mse_loss(noise_b, noise, reduction='mean')
             consist_loss    = args.consist_loss_ratio * consist_loss

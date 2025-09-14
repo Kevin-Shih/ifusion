@@ -79,7 +79,7 @@ def eval_consistency(met3r_eval, nvs_dir, demo_fp, **kwargs):
     np.set_printoptions(precision=3, suppress=None, floatmode='fixed')
     print(f'consistency score: {score.cpu().numpy()}')
     print(f'median: {score.median().item():.3f}, mean: {score.mean().item():.3f}')
-    return score
+    return score.cpu().numpy()
 
 def eval_pose_all(config, scenes, ids, wb_run):
     metric = []
@@ -172,6 +172,7 @@ def eval_consistency_all(config, scenes, ids, wb_run):
 
             consistency_metric.append(consistency_score)
     consistency_metric = np.concatenate(consistency_metric, axis=0)
+    # consistency_metric = np.array(consistency_metric)
     np.savez(f"{config.data.exp_root}/consistency_{config.data.name}.npz", consistency_metric)
     MEt3R_mean = np.mean(consistency_metric[:])
     if wb_run:

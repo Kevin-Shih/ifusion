@@ -55,7 +55,7 @@ class Zero123adv(Zero123, nn.Module):
         print("[INFO] Loaded Zero123adv")
 
     @torch.amp.autocast('cuda', enabled=False)
-    def forward(self, batch, ddpm_step=50, bs=None, noise=None, uncond=0.05, scale=3, ddim_eta=1, max_ddim_steps=50):
+    def forward(self, batch, ddpm_step=None, bs=None, noise=None, uncond=0.05, scale=3, ddim_eta=1, max_ddim_steps=50):
         # region get_input()
         image_target = batch["image_target"]
         if len(image_target.shape) == 3:
@@ -115,8 +115,8 @@ class Zero123adv(Zero123, nn.Module):
         cond1["c_concat"] = [input_mask * self.model.encode_first_stage(image_cond1).mode().detach()]
         cond2["c_concat"] = [input_mask * self.model.encode_first_stage(image_cond2).mode().detach()]
         # endregion
-        # ddpm_step = default(ddpm_step, torch.randint(low=0, high=self.model.num_timesteps, size=(1,)).item())
-        ddpm_step = 50
+        ddpm_step = default(ddpm_step, torch.randint(low=0, high=self.model.num_timesteps, size=(1,)).item())
+        # ddpm_step = 50
         ddim_step = (ddpm_step * max_ddim_steps) // self.model.num_timesteps
         t = torch.full((target_latent.shape[0],), ddpm_step, device=self.model.device).long()
 
