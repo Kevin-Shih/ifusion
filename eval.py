@@ -45,7 +45,7 @@ def eval_nvs(demo_fp, test_image_dir, test_transform_fp, **kwargs) -> tuple[floa
 
 def eval_consistency(met3r_eval, nvs_dir, demo_fp, **kwargs):
     # RGB range must be in [-1, 1], input shape B, k=2, c=3, 256, 256
-    imgs = load_image(demo_fp, resize=False)
+    imgs = load_image(demo_fp, resize=False, verbose=False)
     imgs = torch.cat(torch.chunk(imgs, 8, dim=-1))
     inputs = []
     for i in range(imgs.shape[0] - 1):

@@ -24,7 +24,7 @@ data:
   test_transform_fp: ${data.root_dir}/${data.name}/${data.scene}/test/transform.json
 
   # pose exp
-  exp_root: exp
+  exp_root: runs/scene_pose/pose_only2
   exp_dir: ${data.exp_root}/${data.name}/${data.scene}/${data.id}
   transform_fp: ${data.exp_dir}/transform.json
   scene_transform_fp: null
@@ -42,34 +42,34 @@ model:
     pretrained_config: ldm/ckpt/sd-objaverse-finetune-c_concat-256.yaml
     vram_O: false
 
-# pose:
-#   image_dir: ${data.image_dir}
-#   transform_fp: ${data.transform_fp}
-#   scene_transform_fp: ${data.scene_transform_fp}
-#   demo_fp: ${data.demo_fp}
-#   id: ${data.id}
-#   init_latlon: [[0, 0, 1], [0, 90, 1], [0, 180, 1], [0, -90, 1]]
-#   default_theta: 0
-#   default_azimuth: 0
-#   default_radius: 1.0
-#   default_latlon: ['${pose.default_theta}', '${pose.default_azimuth}', '${pose.default_radius}']
-#   search_radius_range: 0.8
-#   use_step_ratio: true
-#   use_dualway: true
+pose:
+  # image_dir: ${data.image_dir}
+  # transform_fp: ${data.transform_fp}
+  # scene_transform_fp: ${data.scene_transform_fp}
+  # demo_fp: ${data.demo_fp}
+  # id: ${data.id}
+  # init_latlon: [[0, 0, 1], [0, 90, 1], [0, 180, 1], [0, -90, 1]]
+  # default_theta: 0
+  # default_azimuth: 0
+  # default_radius: 1.0
+  # default_latlon: ['${pose.default_theta}', '${pose.default_azimuth}', '${pose.default_radius}']
+  # search_radius_range: 0.8
+  # use_step_ratio: true
+  # use_dualway: true
 
-#   args:
-#     max_step: 100
-#     optimizer:
-#       name: Adam
-#       args:
-#         lr: 1.0e-1
-#         betas: [0.9, 0.999]
-#     scheduler:
-#       name: ReduceLROnPlateau
-#       args:
-#         mode: min
-#         factor: 0.6
-#         patience: 10
+  # args:
+  #   max_step: 100
+  #   optimizer:
+  #     name: Adam
+  #     args:
+  #       lr: 1.0e-1
+  #       betas: [0.9, 0.999]
+  #   scheduler:
+  #     name: ReduceLROnPlateau
+  #     args:
+  #       mode: min
+  #       factor: 0.6
+  #       patience: 10
 
 finetune:
   image_dir: ${data.image_dir}
@@ -81,6 +81,9 @@ finetune:
   args:
     max_step: 5000
     batch_size: 8
+    consist_loss_ratio: 2
+    pred_loss_ratio: 1
+    ddpm_steps: 500
     optimizer:
       name: Adam
       args:
@@ -91,14 +94,12 @@ finetune:
       args:
         mode: min
         factor: 0.3
-        patience: 10
+        patience: 20
     # scheduler:
     #   name: MultiStepLR
     #   args:
     #     milestones: [25]
     #     gamma: 0.1
-    consist_loss_ratio: 2
-    pred_loss_ratio: 1
 
 inference:
   image_dir: ${data.image_dir}

@@ -10,6 +10,7 @@ import torch
 from omegaconf import OmegaConf
 from PIL import Image
 from typing import Optional
+from rich import print
 
 str2list = lambda x: list(map(int, x.split(",")))
 
@@ -86,7 +87,7 @@ def start_wabdb(config, conf_dict, mode, eval=False) -> Optional[wandb.Run]:
         wb_run = None
     elif config.log.run_path:
         print(f'[INFO] Resuming wandb run from \'{config.log.run_path}\'. Ignoring group_name and run_name arguments.')
-        wb_api_run = wandb.Api().run(f'kevin-shih/iFusion-Adv/{config.log.run_path.split("/")[-1]}')
+        wb_api_run: wandb.Run = wandb.Api().run(f'kevin-shih/iFusion-Adv/{config.log.run_path.split("/")[-1]}')
         print(f'Confirm Resuming from \'{wb_api_run.name}\', id:\'{wb_api_run.id}\'? [Y/N]')
         user_input = input()
         if user_input.lower() in ('y', 'yes'):
@@ -97,18 +98,6 @@ def start_wabdb(config, conf_dict, mode, eval=False) -> Optional[wandb.Run]:
                 id=f"{config.log.run_path.split('/')[-1]}",
                 resume="must",
                 settings=wandb.Settings(x_disable_stats=True, x_save_requirements=False),
-                config={
-                    'mode': {
-                        'pose':
-                            wb_api_run.config.mode.pose or mode[0],
-                        'zero123_nvs':
-                            wb_api_run.config.mode.zero123_nvs or (mode[1] and config.finetune is None),
-                        'iFusion_finetune':
-                            wb_api_run.config.mode.iFusion_finetune or (mode[1] and config.finetune is not None),
-                        'my_finetune':
-                            wb_api_run.config.mode.my_finetune or mode[2],
-                    },
-                },
             )
         else:
             print(f'Canceled: Abort execution.')

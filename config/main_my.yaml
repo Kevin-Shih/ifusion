@@ -6,7 +6,7 @@ log:
   # group_name: 'scene0_all'
   group_name: 'all'
   run_name: 'FixDual_my_${finetune.args.consist_loss_ratio}:${finetune.args.pred_loss_ratio}_step${finetune.args.ddpm_steps}'
-  run_path: 
+  run_path: dt9j4xvd
 
 data:
   name: GSO # OO3D
@@ -83,7 +83,7 @@ finetune:
     batch_size: 8
     consist_loss_ratio: 2
     pred_loss_ratio: 1
-    ddpm_steps: 500
+    ddpm_steps: 999
     optimizer:
       name: Adam
       args:

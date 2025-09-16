@@ -81,6 +81,9 @@ finetune:
   args:
     max_step: 5000
     batch_size: 8
+    consist_loss_ratio: 2
+    pred_loss_ratio: 1
+    ddpm_steps: 500
     optimizer:
       name: Adam
       args:
@@ -91,14 +94,12 @@ finetune:
       args:
         mode: min
         factor: 0.3
-        patience: 10
+        patience: 20
     # scheduler:
     #   name: MultiStepLR
     #   args:
     #     milestones: [25]
     #     gamma: 0.1
-    consist_loss_ratio: 2
-    pred_loss_ratio: 1
 
 inference:
   image_dir: ${data.image_dir}

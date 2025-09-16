@@ -42,7 +42,8 @@ def load_frames(
         all_camtoworlds.append(torch.tensor([frame["transform_matrix"]]))
         all_latlons.append(torch.tensor([frame["latlon"]]))
 
-    all_images = torch.cat(all_images)
+    if return_images:
+        all_images = torch.cat(all_images)
     all_camtoworlds = torch.cat(all_camtoworlds)
     all_latlons = torch.cat(all_latlons)
 

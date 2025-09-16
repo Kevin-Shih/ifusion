@@ -4,7 +4,7 @@ log:
   # group_name: 'my_subset_perm52'
   # group_name: 'scene0_all'
   group_name: 'all'
-  run_name: 'FixedScene_my_2:1_100it_50step'
+  run_name: 'FixScene_my_${finetune.args.consist_loss_ratio}:${finetune.args.pred_loss_ratio}_step${finetune.args.ddpm_steps}'
   run_path: 
 
 data:
@@ -81,6 +81,9 @@ finetune:
   args:
     max_step: 100
     batch_size: 8
+    consist_loss_ratio: 2
+    pred_loss_ratio: 1
+    ddpm_steps: 800
     optimizer:
       name: Adam
       args:
@@ -97,8 +100,6 @@ finetune:
       args:
         milestones: [25]
         gamma: 0.1
-    consist_loss_ratio: 2
-    pred_loss_ratio: 1
 
 inference:
   image_dir: ${data.image_dir}
