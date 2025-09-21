@@ -4,7 +4,7 @@ log:
   # group_name: 'my_subset_perm52'
   # group_name: 'scene0_all'
   group_name: 'all'
-  run_name: 'scene_myGeneral_step50_2'
+  run_name: 'FixScene_myGeneral_${finetune.args.consist_loss_ratio}:${finetune.args.pred_loss_ratio}_step${finetune.args.ddpm_steps}_accum8'
   run_path: 
 
 data:
@@ -79,41 +79,43 @@ finetune:
   lora_target_replace_module: [CrossAttention, GEGLU]
 
   args:
-    max_step: 5000
+    max_step: 30000
     batch_size: 8
     consist_loss_ratio: 2
     pred_loss_ratio: 1
-    ddpm_steps: 500
+    ddpm_steps: 600
+    gradient_accumelation: 8
+    eval_steps: 50
     optimizer:
       name: Adam
       args:
         lr: 1e-3
         betas: [0.9, 0.999]
-    scheduler:
-      name: ReduceLROnPlateau
-      args:
-        mode: min
-        factor: 0.3
-        patience: 20
     # scheduler:
-    #   name: MultiStepLR
+    #   name: ReduceLROnPlateau
     #   args:
-    #     milestones: [25]
-    #     gamma: 0.1
+    #     mode: min
+    #     factor: 0.3
+    #     patience: 500
+    scheduler:
+      name: MultiStepLR
+      args:
+        milestones: [500]
+        gamma: 0.1
 
 inference:
   image_dir: ${data.image_dir}
   transform_fp: ${data.scene_transform_fp}
-  test_transform_fp: ${data.test_transform_fp}
+  test_transform_fp: null
   lora_ckpt_fp: ${data.lora_ckpt_fp}
   demo_fp: ${data.demo_fp}
   lora_rank: ${finetune.lora_rank}
   lora_target_replace_module: ${finetune.lora_target_replace_module}
   use_single_view: false
   use_multi_view_condition: true
-  n_views: null
-  theta: null
-  radius: null
+  n_views: 16
+  theta: -30
+  radius: 1.5
 
   args:
-    batch_size: 8
+    batch_size: 16

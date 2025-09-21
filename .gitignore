@@ -16,6 +16,7 @@ __pycache__/
 *out/
 runs/*
 *log
+syncdreamer_eval_examples/
 
 # Data
 *rendering/
@@ -23,3 +24,4 @@ runs/*
 # Experiments
 *exp_*/
 *wandb/
+test.py

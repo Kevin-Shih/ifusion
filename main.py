@@ -35,56 +35,51 @@ def gen_pose_all(model, config, scenes, ids):
                 json.dump(transform_dict, f, indent=4)
 
 
-def gen_nvs_all(model, config, scenes, ids):
+def gen_nvs_all(mode, model, config, scenes, ids):
     for scene in scenes:
         for id in ids:
-            if config.finetune:
-                print(f"[INFO] Fine-tuning \'{scene}\':{id}")
-                config.data.scene = scene
-                config.data.id = id
-                finetune(model, **config.finetune)
-                inference(model, **config.inference)
-            else:
-                print(f"[INFO] Inference \'{scene}\':{id}")
-                config.data.scene = scene
-                config.data.id = id
-                inference(model, **config.inference)
-
-
-def gen_nvs_my_finetune(model, config, scenes, ids):
-    for scene in scenes:
-        for id in ids:
-            print(f"[INFO] Fine-tuning {scene}")
             config.data.scene = scene
             config.data.id = id
-            my_finetune(model, **config.finetune)
+            if mode[0]:
+                print(f"[INFO] Inference Zero123 \'{scene}\':{id}")
+            elif mode[1]:
+                print(f"[INFO] Fine-tuning \'{scene}\':{id}")
+                finetune(model, **config.finetune)
+            else:
+                print(f"[INFO] Inference \'{scene}\':{id}")
             inference(model, **config.inference)
 
 
-def gen_nvs_my_finetune_general(model, config, scenes, ids, wb_run):
-    print(f"[INFO] Fine-tuning (Generalizable)")
-    my_finetune_general(model, config, scenes, ids, wb_run, remove_lora=False)
+def gen_nvs_my_finetune(mode, model, config, scenes, ids):
+    for scene in scenes:
+        for id in ids:
+            config.data.scene = scene
+            config.data.id = id
+            if mode[0]:
+                print(f"[INFO] Fine-tuning \'{scene}\'")
+                my_finetune(model, **config.finetune)
+            else:
+                print(f"[INFO] Inference \'{scene}\'")
+            inference(model, **config.inference)
+
+
+def gen_nvs_my_finetune_general(mode, model, config, scenes, ids, wb_run):
+    if mode[0]:
+        print(f"[INFO] Fine-tuning (Generalizable)")
+        my_finetune_general(model, config, scenes, ids, wb_run)
+        model.inject_lora(
+            ckpt_fp=config.inference.lora_ckpt_fp,
+            rank=config.inference.lora_rank,
+            target_replace_module=config.inference.lora_target_replace_module,
+        )
+    else:
+        print(f"[INFO] Inference (Generalizable)")
     for scene in scenes:
         for id in ids:
             config.data.scene = scene
             config.data.id = id
             inference_all(model, **config.inference)
     model.remove_lora()
-
-
-def gen_nvs_from_ckpt(model, config, scenes, ids):
-    # config.data.lora_ckpt_fp = f'{config.data.nvs_root}/{config.data.name}/lora.ckpt'
-    # config.data.lora_ckpt_fp = f'{config.data.nvs_root}/{config.data.name}/lora/lora_1000.ckpt'
-    model.inject_lora(
-        ckpt_fp=config.inference.lora_ckpt_fp,
-        rank=config.inference.lora_rank,
-        target_replace_module=config.inference.lora_target_replace_module,
-    )
-    for scene in scenes:
-        for id in ids:
-            config.data.scene = scene
-            config.data.id = id
-            inference(model, **config.inference)
 
 
 def main(config, mode, gpu_ids):
@@ -94,14 +89,12 @@ def main(config, mode, gpu_ids):
         model = parse_model(config.model)
         if mode[0]:
             gen_pose_all(model, config, scenes, ids)
-        if mode[1]:
-            gen_nvs_all(model, config, scenes, ids=["0,1"])
-        elif mode[2]:
-            gen_nvs_my_finetune(model, config, scenes, ids=["0,1"])
-        elif mode[3]:
-            gen_nvs_my_finetune_general(model, config, scenes, ids=["0,1"], wb_run=wb_run)
-        elif mode[4]:
-            gen_nvs_from_ckpt(model, config, scenes, ids=["0,1"])
+        if mode[1] or mode[2] or mode[3]: # Zero123, ifusion, ifusion(inference only)
+            gen_nvs_all(mode[1:4], model, config, scenes, ids=["0,1"])
+        elif mode[4] or mode[5]:          # my, my(inference only)
+            gen_nvs_my_finetune(mode[4:6], model, config, scenes, ids=["0,1"])
+        elif mode[6] or mode[7]:          # my_general, my_general(inference only)
+            gen_nvs_my_finetune_general(mode[6:8], model, config, scenes, ids=["0,1"], wb_run=wb_run)
 
     config, conf_dict = config
 
@@ -133,12 +126,19 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('-c', "--config", type=str, default="config/main.yaml")
     parser.add_argument('-p', "--pose", action="store_true")
-    parser.add_argument('-1', "--nvs", action="store_true")
-    parser.add_argument('-2', "--my_nvs", action="store_true")
-    parser.add_argument('-3', "--my_nvs_general", action="store_true")
-    parser.add_argument('-4', "--my_lora_nvs", action="store_true")
+    parser.add_argument('-1', "--zero123", action="store_true")
+    parser.add_argument('-2', "--nvs", action="store_true")
+    parser.add_argument('-3', "--infer", action="store_true")
+    parser.add_argument('-4', "--m_nvs", action="store_true")
+    parser.add_argument('-5', "--m_infer", action="store_true")
+    parser.add_argument('-6', "--mgen_nvs", action="store_true")
+    parser.add_argument('-7', "--mgen_infer", action="store_true")
     parser.add_argument('-g', "--gpu_ids", type=str, default="0")
     args, extras = parser.parse_known_args()
     config = load_config(args.config, cli_args=extras)
     set_random_seed(config[0].seed)
-    main(config, [args.pose, args.nvs, args.my_nvs, args.my_nvs_general, args.my_lora_nvs], args.gpu_ids)
+    main(
+        config,
+        [args.pose, args.zero123, args.nvs, args.infer, args.m_nvs, args.m_infer, args.mgen_nvs, args.mgen_infer],
+        args.gpu_ids
+    )

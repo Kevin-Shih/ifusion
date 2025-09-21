@@ -92,7 +92,7 @@ def start_wabdb(config, conf_dict, mode, eval=False) -> Optional[wandb.Run]:
         user_input = input()
         if user_input.lower() in ('y', 'yes'):
             wb_run = wandb.init(
-                dir="../wandb",
+                dir="../",
                 entity="kevin-shih",
                 project="iFusion-Adv",
                 id=f"{config.log.run_path.split('/')[-1]}",
@@ -104,7 +104,7 @@ def start_wabdb(config, conf_dict, mode, eval=False) -> Optional[wandb.Run]:
             exit(0)
     else:
         wb_run = wandb.init(
-            dir="./wandb",
+            dir="../",
             entity="kevin-shih",
             project="iFusion-Adv",
             group=f'{config.log.group_name}',

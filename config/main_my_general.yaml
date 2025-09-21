@@ -104,16 +104,16 @@ finetune:
 inference:
   image_dir: ${data.image_dir}
   transform_fp: ${data.transform_fp}
-  test_transform_fp: ${data.test_transform_fp}
+  test_transform_fp: null
   lora_ckpt_fp: ${data.lora_ckpt_fp}
   demo_fp: ${data.demo_fp}
   lora_rank: ${finetune.lora_rank}
   lora_target_replace_module: ${finetune.lora_target_replace_module}
   use_single_view: false
   use_multi_view_condition: true
-  n_views: null
-  theta: null
-  radius: null
+  n_views: 16
+  theta: -30
+  radius: 1.5
 
   args:
-    batch_size: 8
+    batch_size: 16
