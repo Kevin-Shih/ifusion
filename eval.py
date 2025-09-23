@@ -3,17 +3,20 @@ import itertools
 import os
 import wandb
 import torch
+import json
 import numpy as np
 
 from dataset.base import load_frames
 from util.util import load_config, load_image, set_random_seed, str2list, start_wabdb
 from util.pose import mat2latlon
+from util.colmap import patch_match_with_known_poses
 
 from rich import print
 from met3r import MEt3R
 from PIL import Image
 from pytorch3d import io
 from typing import Optional
+from einops import rearrange
 
 
 def eval_pose(scene_transform_fp, transform_fp, gt_transform_fp, image_dir, id, **kwargs):
@@ -84,25 +87,44 @@ def eval_consistency(met3r_eval, nvs_dir, demo_fp, **kwargs):
     return score   #.mean()
 
 
+def eval_colmap(demo_fp: str, colmap_proj_root: str, colmap_path='colmap'):
+    colmap_proj_dir = os.path.join(colmap_proj_root, 'colmap')
+    # if not os.path.exists(os.path.join(colmap_proj_dir, 'points.ply')):
+    in_image_fp = demo_fp.replace('.png', '_colmap.png')
+    colmap_demo_imgs = np.array(Image.open(in_image_fp))
+    patch_match_with_known_poses(colmap_demo_imgs, colmap_proj_dir, colmap_path=colmap_path)
+    if os.path.exists(os.path.join(colmap_proj_dir, 'points.ply')):
+        vert, _ = io.load_ply(f'{colmap_proj_dir}/points.ply',)
+    else:
+        vert = []
+    return len(vert)
+
+
 def eval_pose_all(config, scenes, ids, wb_run: Optional[wandb.Run]):
     metric = []
+    metric_dict = {}
     for scene in scenes:
         if config.data.scene_transform_fp:
             print(f"[INFO] Evaluating pose \'{scene}\' with scene_transform_fp")
             config.data.scene = scene
             pose_err = eval_pose(**config.data)
             metric.append(pose_err)
+            metric_dict[scene] = pose_err
         else:
+            metric_dict[scene] = {}
             for id in ids:
                 print(f"[INFO] Evaluating pose \'{scene}\':{id}")
                 config.data.scene = scene
                 config.data.id = id
                 pose_err = eval_pose(**config.data)
                 metric.append(pose_err)
+                metric_dict[scene][id] = pose_err
     # print(f"[INFO] metric shape: {len(metric)} x {metric[0].shape}")
     metric = np.concatenate(metric, axis=0)
     # print(f"[INFO] metric shape after:  {metric.shape}")
     np.savez(f"{config.data.exp_root}/pose_{config.data.name}.npz", metric)
+    with open(f"{config.data.exp_root}/pose_{config.data.name}.json", "w") as f:
+        json.dump(metric_dict, f, indent=4)
     rot_p25, rot_p50, rot_p75 = np.percentile(metric[:, 0], [25, 50, 75])
     trans_p25, trans_p50, trans_p75 = np.percentile(metric[:, 1], [25, 50, 75])
     Recall5 = sum(metric[:, 0] <= 5) / len(metric)
@@ -128,14 +150,23 @@ def eval_pose_all(config, scenes, ids, wb_run: Optional[wandb.Run]):
 
 def eval_nvs_all(config, scenes, ids, wb_run: Optional[wandb.Run]):
     metric = []
+    metric_dict = {}
     for scene in scenes:
         for id in ids:
             print(f"[INFO] Evaluating nvs \'{scene}\':{id}")
             config.data.scene = scene
             config.data.id = id
-            metric.append(eval_nvs(**config.data))
+            nvs_err = eval_nvs(**config.data)
+            metric.append(nvs_err)
+            metric_dict[scene] = {
+                'PSNR': nvs_err[0],
+                'SSIM': nvs_err[1],
+                'LPIPS': nvs_err[2],
+            }
     metric = np.array(metric)
-    np.savez(f"{config.data.exp_root}/nvs_{config.data.name}.npz", metric)
+    np.savez(f"{config.data.nvs_root}/nvs_{config.data.name}.npz", metric)
+    with open(f"{config.data.nvs_root}/nvs_{config.data.name}.json", "w") as f:
+        json.dump(metric_dict, f, indent=4)
     if wb_run:
         PSNR_p25, PSNR_p50, PSNR_p75 = np.percentile(metric[:, 0], [25, 50, 75])
         SSIM_p25, SSIM_p50, SSIM_p75 = np.percentile(metric[:, 1], [25, 50, 75])
@@ -169,33 +200,63 @@ def eval_consistency_all(config, scenes, ids, wb_run: Optional[wandb.Run]):
         distance="cosine",                              # Default to feature similarity, select from ["cosine", "lpips", "rmse", "psnr", "mse", "ssim"]
         freeze=True,                                    # Default to True
     ).cuda()
-    consistency_metric = []
+
+    metric = []
+    metric_dict = {}
     for scene in scenes:
         for id in ids:
             print(f"[INFO] Evaluating consistency \'{scene}\':{id}")
             config.data.scene = scene
             config.data.id = id
             consistency_score = eval_consistency(met3r_eval, **config.data)
-
-            consistency_metric.append(consistency_score)
-    consistency_metric = np.concatenate(consistency_metric, axis=0)
-    # consistency_metric = np.array(consistency_metric)
-    np.savez(f"{config.data.exp_root}/consistency_{config.data.name}.npz", consistency_metric)
-    MEt3R_mean = np.mean(consistency_metric[:])
+            metric.append(consistency_score)
+            metric_dict[scene] = consistency_score.squeeze().tolist()
+    metric = np.concatenate(metric, axis=0)
+    np.savez(f"{config.data.nvs_root}/consistency_{config.data.name}.npz", metric)
+    with open(f"{config.data.nvs_root}/consistency_{config.data.name}.json", "w") as f:
+        json.dump(metric_dict, f, indent=4)
+    MEt3R_mean = np.mean(metric[:])
     if wb_run:
-        MEt3R_p25, MEt3R_p50, MEt3R_p75 = np.percentile(consistency_metric[:], [25, 50, 75])
+        MEt3R_p25, MEt3R_p50, MEt3R_p75 = np.percentile(metric[:], [25, 50, 75])
         wb_run.summary.update({
-            'Consistentcy/Recall(<=0.1)': sum(consistency_metric[:] <= 0.1) / len(consistency_metric),
-            'Consistentcy/Recall(<=0.2)': sum(consistency_metric[:] <= 0.2) / len(consistency_metric),
-            'Consistentcy/Recall(<=0.3)': sum(consistency_metric[:] <= 0.3) / len(consistency_metric),
+            'Consistentcy/Recall(<=0.1)': sum(metric[:] <= 0.1) / len(metric),
+            'Consistentcy/Recall(<=0.2)': sum(metric[:] <= 0.2) / len(metric),
+            'Consistentcy/Recall(<=0.3)': sum(metric[:] <= 0.3) / len(metric),
             'Consistentcy/MEt3R error (p25)': MEt3R_p25,
             'Consistentcy/MEt3R error (median)': MEt3R_p50,
             'Consistentcy/MEt3R error (p75)': MEt3R_p75,
             'Consistentcy/MEt3R error (mean)': MEt3R_mean,
         })
-    print(
-        f"Consistency score: {MEt3R_mean:.3f}, Recall: {sum(consistency_metric[:] <= 0.1) / len(consistency_metric):.3f}"
-    )
+    print(f"Consistency score: {MEt3R_mean:.3f}, Recall: {sum(metric[:] <= 0.1) / len(metric):.3f}")
+
+
+def eval_colmap_all(config, scenes, ids, wb_run: Optional[wandb.Run]):
+    colmap_metric = []
+    metric_dict = {}
+    for scene in scenes:
+        for id in ids:
+            print(f"[INFO] Evaluating colmap \'{scene}\':{id}")
+            config.data.scene = scene
+            config.data.id = id
+            colmap_points = eval_colmap(config.inference.demo_fp, config.data.nvs_dir)
+            colmap_metric.append(colmap_points)
+            metric_dict[scene] = colmap_points
+    # colmap_metric = np.concatenate(colmap_metric, axis=0)
+    colmap_metric = np.array(colmap_metric)
+    print(colmap_metric.shape)
+    np.savez(f"{config.data.nvs_root}/colmap_{config.data.name}.npz", colmap_metric)
+    with open(f"{config.data.exp_root}/colmap_{config.data.name}.json", "w") as f:
+        json.dump(metric_dict, f, indent=4)
+    colmap_mean = np.mean(colmap_metric[:])
+    if wb_run:
+        colmap_p25, colmap_p50, colmap_p75 = np.percentile(colmap_metric[:], [25, 50, 75])
+        wb_run.summary.update({
+            'COLMAP/colmap points (p25)': colmap_p25,
+            'COLMAP/colmap points (median)': colmap_p50,
+            'COLMAP/colmap points (p75)': colmap_p75,
+            'COLMAP/colmap points (mean)': colmap_mean,
+        })
+    print(f"COLMAP points: {colmap_mean:.3f}")
 
 
 def main(config, mode):
@@ -213,6 +274,8 @@ def main(config, mode):
         eval_nvs_all(config, scenes, ids=["0,1"], wb_run=wb_run)
     if mode[2]:
         eval_consistency_all(config, scenes, ids=["0,1"], wb_run=wb_run)
+    if mode[3]:
+        eval_colmap_all(config, scenes, ids=["0,1"], wb_run=wb_run)
     if wb_run:
         wb_run.finish()
 
@@ -220,13 +283,14 @@ def main(config, mode):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", type=str, default="config/main.yaml")
-    parser.add_argument('-c', "--consistency", action="store_true")
     parser.add_argument('-p', "--pose", action="store_true")
     parser.add_argument('-n', "--nvs", action="store_true")
+    parser.add_argument('-c', "--consistency", action="store_true")
+    parser.add_argument('-3', "--colmap", action="store_true")
     parser.add_argument('-g', '--gpu_id', type=str, default='4')
     args, extras = parser.parse_known_args()
     config = load_config(args.config, cli_args=extras)
 
     set_random_seed(config[0].seed)
     os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu_id
-    main(config, [args.pose, args.nvs, args.consistency])
+    main(config, [args.pose, args.nvs, args.consistency, args.colmap])

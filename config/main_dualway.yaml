@@ -23,7 +23,7 @@ data:
   test_transform_fp: ${data.root_dir}/${data.name}/${data.scene}/test/transform.json
 
   # pose exp
-  exp_root: exp
+  exp_root: runs/scene_pose/pose_only2
   exp_dir: ${data.exp_root}/${data.name}/${data.scene}/${data.id}
   transform_fp: ${data.exp_dir}/transform.json
   scene_transform_fp: null

@@ -425,9 +425,9 @@ def my_finetune_general(
                 # loss += torch.nn.functional.mse_loss(nvs_latent_b, noise, reduction='mean')
                 # loss = inconsistency(nvs_latent_a, nvs_latent_b) # l2 or met3r
                 # endregion
-                consist_loss *= args.consist_loss_ratio
-                noise_pred_loss *= args.pred_loss_ratio
-                loss = (consist_loss + noise_pred_loss) / grad_accumelation
+                loss = (
+                    consist_loss * args.consist_loss_ratio + noise_pred_loss * args.pred_loss_ratio
+                ) / grad_accumelation
                 loss.backward()
             optimizer.step()
             scheduler.step()
@@ -583,5 +583,5 @@ def inference_all(
     plot_image(out, fp=demo_fp)
     out_colmap = rearrange(out_colmap, "b c h w -> c h (b w)")
     plot_image(out_colmap, fp=demo_fp.replace('.png', '_colmap.png'))
-    print(f"[INFO] Saved image to {demo_fp} and {demo_fp.replace('.png', '_colmap.png')}")
+    print(f"[INFO] Saved image to {demo_fp} and {os.path.basename(demo_fp).replace('.png', '_colmap.png')}")
     return out

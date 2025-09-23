@@ -4,7 +4,7 @@ log:
   # group_name: 'my_subset_perm52'
   # group_name: 'scene0_all'
   group_name: 'all'
-  run_name: 'Render16_FixScene_my_${finetune.args.consist_loss_ratio}:${finetune.args.pred_loss_ratio}_step${finetune.args.ddpm_steps}'
+  run_name: 'Render16_FixScene_my_${finetune.args.consist_loss_ratio}:${finetune.args.pred_loss_ratio}_step${finetune.args.ddpm_steps}_50it'
   run_path: 
 
 data:
@@ -79,11 +79,11 @@ finetune:
   lora_target_replace_module: [CrossAttention, GEGLU]
 
   args:
-    max_step: 100
+    max_step: 50
     batch_size: 8
     consist_loss_ratio: 2
     pred_loss_ratio: 1
-    ddpm_steps: 500
+    ddpm_steps: 600
     optimizer:
       name: Adam
       args:

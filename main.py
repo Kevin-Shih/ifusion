@@ -67,13 +67,13 @@ def gen_nvs_my_finetune_general(mode, model, config, scenes, ids, wb_run):
     if mode[0]:
         print(f"[INFO] Fine-tuning (Generalizable)")
         my_finetune_general(model, config, scenes, ids, wb_run)
-        model.inject_lora(
-            ckpt_fp=config.inference.lora_ckpt_fp,
-            rank=config.inference.lora_rank,
-            target_replace_module=config.inference.lora_target_replace_module,
-        )
     else:
         print(f"[INFO] Inference (Generalizable)")
+    model.inject_lora(
+        ckpt_fp=config.inference.lora_ckpt_fp,
+        rank=config.inference.lora_rank,
+        target_replace_module=config.inference.lora_target_replace_module,
+    )
     for scene in scenes:
         for id in ids:
             config.data.scene = scene

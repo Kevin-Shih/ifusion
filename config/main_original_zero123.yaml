@@ -5,8 +5,8 @@ log:
   # group_name: 'scene0_all'
   # group_name: 'scene0,2_id0,3'
   # group_name: 'my_subset'
-  run_name: 'Finetune_original_zero123_ALL'
-  run_path: kevin-shih/iFusion-Adv/uu5v60zq
+  run_name: 'Render16_riginal_zero123'
+  run_path: 69zpvc1r
 
 data:
   name: GSO # OO3D
@@ -24,7 +24,7 @@ data:
   test_transform_fp: ${data.root_dir}/${data.name}/${data.scene}/test/transform.json
 
   # pose exp
-  exp_root: exp
+  exp_root: runs/scene_pose/pose_only_original
   exp_dir: ${data.exp_root}/${data.name}/${data.scene}/${data.id}
   transform_fp: ${data.exp_dir}/transform.json
   scene_transform_fp: null
@@ -102,9 +102,9 @@ inference:
   lora_target_replace_module: null
   use_single_view: true
   use_multi_view_condition: false
-  n_views: null
-  theta: null
-  radius: null
+  n_views: 16
+  theta: -30
+  radius: 1.5
 
   args:
-    batch_size: 8
+    batch_size: 16

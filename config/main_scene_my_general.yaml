@@ -4,7 +4,7 @@ log:
   # group_name: 'my_subset_perm52'
   # group_name: 'scene0_all'
   group_name: 'all'
-  run_name: 'FixScene_myGeneral_${finetune.args.consist_loss_ratio}:${finetune.args.pred_loss_ratio}_step${finetune.args.ddpm_steps}_accum8'
+  run_name: 'Render6000_FixScene_myGeneral_${finetune.args.consist_loss_ratio}:${finetune.args.pred_loss_ratio}_step${finetune.args.ddpm_steps}_accum8'
   run_path: 
 
 data:
@@ -79,7 +79,7 @@ finetune:
   lora_target_replace_module: [CrossAttention, GEGLU]
 
   args:
-    max_step: 30000
+    max_step: 10000
     batch_size: 8
     consist_loss_ratio: 2
     pred_loss_ratio: 1
@@ -100,7 +100,7 @@ finetune:
     scheduler:
       name: MultiStepLR
       args:
-        milestones: [500]
+        milestones: [500, 2000]
         gamma: 0.1
 
 inference:
