@@ -46,6 +46,22 @@ def eval_nvs(demo_fp, test_image_dir, test_transform_fp, **kwargs) -> tuple[floa
     return psnr, ssim, lpips
 
 
+def eval_2view_nvs(demo_fp: str, **kwargs) -> tuple[float, float, float]:
+    fp1 = demo_fp.replace('.png', '_0_16view.png')
+    fp2 = demo_fp.replace('.png', '_1_16view.png')
+    from util.criterion import lpips_fn, psnr_fn, ssim_fn
+    pred = load_image(fp1, resize=False, to_clip=False, verbose=False)
+    pred = torch.cat(torch.chunk(pred, 16, dim=-1)[::2])
+    pred2 = load_image(fp2, resize=False, to_clip=False, verbose=False)
+    pred2 = torch.cat(torch.chunk(pred2, 16, dim=-1)[::2])
+    pred2 = pred2.to(pred.device)
+
+    psnr = psnr_fn(pred, pred2).item()
+    ssim = ssim_fn(pred, pred2).item()
+    lpips = lpips_fn(pred, pred2).item()
+    return psnr, ssim, lpips
+
+
 def eval_consistency(met3r_eval, nvs_dir, demo_fp, **kwargs):
     # RGB range must be in [-1, 1], input shape B, k=2, c=3, 256, 256
     imgs = load_image(demo_fp, resize=False, verbose=False)
@@ -186,7 +202,7 @@ def eval_nvs_all(config, scenes, ids, wb_run: Optional[wandb.Run]):
             'NVS/SSIM  (mean)': SSIM_mean,
             'NVS/LPIPS (mean)': LPIPS_mean,
         })
-    print(f"PSNR: {metric[:, 0].mean():.3f}, SSIM: {metric[:, 1].mean():.3f}, LPIPS: {metric[:, 2].mean():.3f}")
+    print(f"PSNR: {PSNR_mean:.3f}, SSIM: {SSIM_mean:.3f}, LPIPS: {LPIPS_mean:.3f}")
 
 
 def eval_consistency_all(config, scenes, ids, wb_run: Optional[wandb.Run]):
@@ -231,7 +247,7 @@ def eval_consistency_all(config, scenes, ids, wb_run: Optional[wandb.Run]):
 
 
 def eval_colmap_all(config, scenes, ids, wb_run: Optional[wandb.Run]):
-    colmap_metric = []
+    metric = []
     metric_dict = {}
     for scene in scenes:
         for id in ids:
@@ -239,17 +255,16 @@ def eval_colmap_all(config, scenes, ids, wb_run: Optional[wandb.Run]):
             config.data.scene = scene
             config.data.id = id
             colmap_points = eval_colmap(config.inference.demo_fp, config.data.nvs_dir)
-            colmap_metric.append(colmap_points)
+            metric.append(colmap_points)
             metric_dict[scene] = colmap_points
-    # colmap_metric = np.concatenate(colmap_metric, axis=0)
-    colmap_metric = np.array(colmap_metric)
-    print(colmap_metric.shape)
-    np.savez(f"{config.data.nvs_root}/colmap_{config.data.name}.npz", colmap_metric)
+    # metric = np.concatenate(metric, axis=0)
+    metric = np.array(metric)
+    np.savez(f"{config.data.nvs_root}/colmap_{config.data.name}.npz", metric)
     with open(f"{config.data.exp_root}/colmap_{config.data.name}.json", "w") as f:
         json.dump(metric_dict, f, indent=4)
-    colmap_mean = np.mean(colmap_metric[:])
+    colmap_mean = np.mean(metric[:])
     if wb_run:
-        colmap_p25, colmap_p50, colmap_p75 = np.percentile(colmap_metric[:], [25, 50, 75])
+        colmap_p25, colmap_p50, colmap_p75 = np.percentile(metric[:], [25, 50, 75])
         wb_run.summary.update({
             'COLMAP/colmap points (p25)': colmap_p25,
             'COLMAP/colmap points (median)': colmap_p50,
@@ -257,6 +272,45 @@ def eval_colmap_all(config, scenes, ids, wb_run: Optional[wandb.Run]):
             'COLMAP/colmap points (mean)': colmap_mean,
         })
     print(f"COLMAP points: {colmap_mean:.3f}")
+
+
+def eval_consitency_2view_all(config, scenes, ids, wb_run: Optional[wandb.Run]):
+    metric = []
+    metric_dict = {}
+    for scene in scenes:
+        for id in ids:
+            print(f"[INFO] Evaluating A,B view results \'{scene}\':{id}")
+            config.data.scene = scene
+            config.data.id = id
+            nvs_score = eval_2view_nvs(config.inference.demo_fp)
+            metric.append(nvs_score)
+            metric_dict[scene] = nvs_score
+    metric = np.array(metric)
+    np.savez(f"{config.data.nvs_root}/colmap_{config.data.name}.npz", metric)
+    with open(f"{config.data.exp_root}/colmap_{config.data.name}.json", "w") as f:
+        json.dump(metric_dict, f, indent=4)
+    if wb_run:
+        PSNR_p25, PSNR_p50, PSNR_p75 = np.percentile(metric[:, 0], [25, 50, 75])
+        SSIM_p25, SSIM_p50, SSIM_p75 = np.percentile(metric[:, 1], [25, 50, 75])
+        LPIPS_p25, LPIPS_p50, LPIPS_p75 = np.percentile(metric[:, 2], [25, 50, 75])
+        PSNR_mean, SSIM_mean, LPIPS_mean = np.mean(metric, axis=0)
+        wb_run.summary.update({
+            'Consistentcy/PSNR (p25)': PSNR_p25,
+            'Consistentcy/PSNR (median)': PSNR_p50,
+            'Consistentcy/PSNR (p75)': PSNR_p75,
+            'Consistentcy/SSIM (p25)': SSIM_p25,
+            'Consistentcy/SSIM (median)': SSIM_p50,
+            'Consistentcy/SSIM (p75)': SSIM_p75,
+            'Consistentcy/LPIPS (p25)': LPIPS_p25,
+            'Consistentcy/LPIPS (median)': LPIPS_p50,
+            'Consistentcy/LPIPS (p75)': LPIPS_p75,
+            'Consistentcy/PSNR  (mean)': PSNR_mean,
+            'Consistentcy/SSIM  (mean)': SSIM_mean,
+            'Consistentcy/LPIPS (mean)': LPIPS_mean,
+        })
+    print(
+        f"Consistentcy/PSNR: {metric[:, 0].mean():.3f}, SSIM: {metric[:, 1].mean():.3f}, LPIPS: {metric[:, 2].mean():.3f}"
+    )
 
 
 def main(config, mode):

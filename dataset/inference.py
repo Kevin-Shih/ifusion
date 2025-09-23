@@ -7,22 +7,19 @@ from util.typing import *
 from util.util import load_image
 
 
-def make_circular_poses(
-    n_views: int = 8, theta: int = -20, default_radius: float = 1.0
-):
+def make_circular_poses(n_views: int = 8, theta: int = -20, default_radius: float = 1.0):
     """Generate a list of poses on a circle."""
     azimuths = torch.arange(0, 360, 360 / n_views)
-    latlon = torch.stack(
-        (
-            torch.ones_like(azimuths) * theta,
-            azimuths,
-            torch.ones_like(azimuths) * default_radius,
-        )
-    ).T
+    latlon = torch.stack((
+        torch.ones_like(azimuths) * theta,
+        azimuths,
+        torch.ones_like(azimuths) * default_radius,
+    )).T
     return latlon2mat(latlon)
 
 
 class SingleImageInferenceDataset(Dataset, BaseDataset):
+
     def __init__(
         self,
         image_fp: str = None,
@@ -33,13 +30,14 @@ class SingleImageInferenceDataset(Dataset, BaseDataset):
         theta: int = -20,
         radius: float = 1.0,
         default_latlon: List[float] = [0, 0, 1],
+        image_idx: int = 0,
     ):
         if image_fp:
             self.image = load_image(image_fp, device="cpu").squeeze(0)
             self.camtoworld = latlon2mat(torch.tensor([default_latlon]))
         elif transform_fp:
             self.setup(image_dir, transform_fp)
-            self.image, self.camtoworld = self.all_images[0], self.all_camtoworlds[0]
+            self.image, self.camtoworld = self.all_images[image_idx], self.all_camtoworlds[image_idx]
         else:
             raise ValueError("Either image_fp or transform_fp must be provided.")
 
@@ -73,6 +71,7 @@ class SingleImageInferenceDataset(Dataset, BaseDataset):
 
 
 class MultiImageInferenceDataset(Dataset, BaseDataset):
+
     def __init__(
         self,
         image_dir: str = None,
@@ -97,12 +96,10 @@ class MultiImageInferenceDataset(Dataset, BaseDataset):
 
     def __getitem__(self, index):
         target_camtoworld = self.infer_camtoworlds[index]
-        latlon = torch.stack(
-            [
-                self.get_trans(target_camtoworld, self.all_camtoworlds[i], in_T=False)
-                for i in range(len(self.all_camtoworlds))
-            ]
-        )
+        latlon = torch.stack([
+            self.get_trans(target_camtoworld, self.all_camtoworlds[i], in_T=False)
+            for i in range(len(self.all_camtoworlds))
+        ])
         return {
             "image_cond": self.all_images,
             "theta": latlon[:, 0],

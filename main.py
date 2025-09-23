@@ -7,7 +7,7 @@ import json
 import numpy as np
 
 from dataset.base import load_frames
-from ifusion import finetune, inference, optimize_pose, my_finetune, my_finetune_general, inference_all
+from ifusion import finetune, inference, optimize_pose, my_finetune, my_finetune_general, inference_for_consist
 from util.util import load_config, parse_model, set_random_seed, str2list, split_list, start_wabdb
 from rich import print
 
@@ -44,10 +44,18 @@ def gen_nvs_all(mode, model, config, scenes, ids):
                 print(f"[INFO] Inference Zero123 \'{scene}\':{id}")
             elif mode[1]:
                 print(f"[INFO] Fine-tuning \'{scene}\':{id}")
-                finetune(model, **config.finetune)
+                finetune(model, reuse_lora=True, **config.finetune)
             else:
                 print(f"[INFO] Inference \'{scene}\':{id}")
-            inference(model, **config.inference)
+                model.inject_lora(
+                    ckpt_fp=config.inference.lora_ckpt_fp,
+                    rank=config.inference.lora_rank,
+                    target_replace_module=config.inference.lora_target_replace_module,
+                )
+            inference(model, reuse_lora=True, **config.inference)
+            inference_for_consist(model, reuse_lora=True, **config.inference)
+            if not mode[0]:
+                model.remove_lora()
 
 
 def gen_nvs_my_finetune(mode, model, config, scenes, ids):
@@ -57,28 +65,36 @@ def gen_nvs_my_finetune(mode, model, config, scenes, ids):
             config.data.id = id
             if mode[0]:
                 print(f"[INFO] Fine-tuning \'{scene}\'")
-                my_finetune(model, **config.finetune)
+                my_finetune(model, reuse_lora=True, **config.finetune)
             else:
                 print(f"[INFO] Inference \'{scene}\'")
-            inference(model, **config.inference)
+                model.inject_lora(
+                    ckpt_fp=config.inference.lora_ckpt_fp,
+                    rank=config.inference.lora_rank,
+                    target_replace_module=config.inference.lora_target_replace_module,
+                )
+            inference(model, reuse_lora=True, **config.inference)
+            inference_for_consist(model, reuse_lora=True, **config.inference)
+            model.remove_lora()
 
 
 def gen_nvs_my_finetune_general(mode, model, config, scenes, ids, wb_run):
     if mode[0]:
         print(f"[INFO] Fine-tuning (Generalizable)")
-        my_finetune_general(model, config, scenes, ids, wb_run)
+        my_finetune_general(model, True, config, scenes, ids, wb_run)
     else:
         print(f"[INFO] Inference (Generalizable)")
-    model.inject_lora(
-        ckpt_fp=config.inference.lora_ckpt_fp,
-        rank=config.inference.lora_rank,
-        target_replace_module=config.inference.lora_target_replace_module,
-    )
+        model.inject_lora(
+            ckpt_fp=config.inference.lora_ckpt_fp,
+            rank=config.inference.lora_rank,
+            target_replace_module=config.inference.lora_target_replace_module,
+        )
     for scene in scenes:
         for id in ids:
             config.data.scene = scene
             config.data.id = id
-            inference_all(model, **config.inference)
+            inference(model, reuse_lora=True, **config.inference)
+            inference_for_consist(model, reuse_lora=True, **config.inference)
     model.remove_lora()
 
 

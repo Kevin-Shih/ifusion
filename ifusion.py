@@ -269,6 +269,7 @@ def optimize_pose(
 
 def finetune(
     model,
+    reuse_lora: bool,
     image_dir: str,
     transform_fp: str,
     lora_ckpt_fp: str,
@@ -303,11 +304,13 @@ def finetune(
 
     os.makedirs(os.path.dirname(lora_ckpt_fp), exist_ok=True)
     model.save_lora(lora_ckpt_fp)
-    model.remove_lora()
+    if not reuse_lora:
+        model.remove_lora()
 
 
 def my_finetune(
     model,
+    reuse_lora: bool,
     image_dir: str,
     transform_fp: str,
     lora_ckpt_fp: str,
@@ -352,11 +355,13 @@ def my_finetune(
 
     os.makedirs(os.path.dirname(lora_ckpt_fp), exist_ok=True)
     model.save_lora(lora_ckpt_fp)
-    model.remove_lora()
+    if not reuse_lora:
+        model.remove_lora()
 
 
 def my_finetune_general(
     model,
+    reuse_lora: bool,
     config: Dict,
     scenes: List[str],
     ids: List[str],
@@ -456,7 +461,8 @@ def my_finetune_general(
                     "eval/LPIPS": LPIPS_mean,
                 }, step=step + 1)
     model.save_lora(config.data.lora_ckpt_fp)
-    model.remove_lora()
+    if not reuse_lora:
+        model.remove_lora()
 
 
 def ckpt_infer_and_eval(model, config, scenes, ids, lora_ckpt_fp):
@@ -479,6 +485,7 @@ def ckpt_infer_and_eval(model, config, scenes, ids, lora_ckpt_fp):
 
 def inference(
     model,
+    reuse_lora: bool,
     image_dir: str,
     transform_fp: str,
     test_transform_fp: str,
@@ -493,7 +500,7 @@ def inference(
     radius: float,
     args,
 ):
-    if lora_ckpt_fp:
+    if lora_ckpt_fp and not reuse_lora:
         model.inject_lora(
             ckpt_fp=lora_ckpt_fp,
             rank=lora_rank,
@@ -525,7 +532,7 @@ def inference(
             distance=batch["distance"],
         )
 
-    if lora_ckpt_fp:
+    if lora_ckpt_fp and not reuse_lora:
         model.remove_lora()
 
     os.makedirs(os.path.dirname(demo_fp), exist_ok=True)
@@ -585,3 +592,85 @@ def inference_all(
     plot_image(out_colmap, fp=demo_fp.replace('.png', '_colmap.png'))
     print(f"[INFO] Saved image to {demo_fp} and {os.path.basename(demo_fp).replace('.png', '_colmap.png')}")
     return out
+
+
+def inference_for_consist(
+    model,
+    reuse_lora: bool,
+    image_dir: str,
+    transform_fp: str,
+    test_transform_fp: str,
+    lora_ckpt_fp: str,
+    demo_fp: str,
+    lora_rank: int,
+    lora_target_replace_module: List[str],
+    use_single_view: bool,
+    use_multi_view_condition: bool,
+    n_views: int,
+    theta: float,
+    radius: float,
+    args,
+):
+    if lora_ckpt_fp and not reuse_lora:
+        model.inject_lora(
+            ckpt_fp=lora_ckpt_fp,
+            rank=lora_rank,
+            target_replace_module=lora_target_replace_module,
+        )
+
+    test_dataset = SingleImageInferenceDataset
+    generate_fn = model.generate_from_tensor
+    # from view 0
+    test_dataset = test_dataset(
+        image_dir=image_dir,
+        transform_fp=transform_fp,
+        test_transform_fp=test_transform_fp,
+        n_views=n_views,
+        theta=theta,
+        radius=radius,
+        image_idx=0
+    )
+    test_loader = test_dataset.loader(args.batch_size)
+    for batch in test_loader:
+        batch = {k: v.to(model.device) for k, v in batch.items()}
+        out_0_16view = generate_fn(
+            image=batch["image_cond"],
+            theta=batch["theta"],
+            azimuth=batch["azimuth"],
+            distance=batch["distance"],
+        )
+    # from view 1
+    test_dataset = test_dataset(
+        image_dir=image_dir,
+        transform_fp=transform_fp,
+        test_transform_fp=test_transform_fp,
+        n_views=n_views,
+        theta=theta,
+        radius=radius,
+        image_idx=1
+    )
+    test_loader = test_dataset.loader(args.batch_size)
+    for batch in test_loader:
+        batch = {k: v.to(model.device) for k, v in batch.items()}
+        out_1_16view = generate_fn(
+            image=batch["image_cond"],
+            theta=batch["theta"],
+            azimuth=batch["azimuth"],
+            distance=batch["distance"],
+        )
+
+    if lora_ckpt_fp and not reuse_lora:
+        model.remove_lora()
+
+    os.makedirs(os.path.dirname(demo_fp), exist_ok=True)
+    out_0 = rearrange(out_0_16view[::2], "b c h w -> c h (b w)")
+    plot_image(out_0, fp=demo_fp.replace('.png', '_0.png'))
+    out_0_16view = rearrange(out_0_16view, "b c h w -> c h (b w)")
+    plot_image(out_0_16view, fp=demo_fp.replace('.png', '_0_16view.png'))
+
+    out_1 = rearrange(out_1_16view[::2], "b c h w -> c h (b w)")
+    plot_image(out_1, fp=demo_fp.replace('.png', '_1.png'))
+    out_1_16view = rearrange(out_1_16view, "b c h w -> c h (b w)")
+    plot_image(out_1_16view, fp=demo_fp.replace('.png', '_1_16view.png'))
+    print(f"[INFO] Saved image to {demo_fp.replace('.png', '_0.png')}")
+    return out_0_16view, out_1_16view
