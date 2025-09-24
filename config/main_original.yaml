@@ -4,8 +4,8 @@ log:
   group_name: 'all'
   # group_name: 'scene0_all'
   # # group_name: 'my_subset'
-  run_name: 'Render16_original_iFusion'
-  run_path: ain7bt6y
+  run_name: 'Render16_original_iFusion2'
+  run_path: lzl3uy53
 
 data:
   name: GSO # OO3D

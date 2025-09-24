@@ -67,7 +67,7 @@ POSES = np.array([[[9.99704497e-08, 1.00000000e+00, -4.21468478e-08,
 # POSES = POSES[::2]
 
 
-def extract_and_match_sift(colmap_path, database_path, image_dir):
+def extract_and_match_sift(colmap_path, database_path, image_dir, logfile=None):
     cmd = [
         str(colmap_path),
         'feature_extractor',
@@ -91,7 +91,7 @@ def extract_and_match_sift(colmap_path, database_path, image_dir):
         '1',
     ]
     print(' '.join(cmd))
-    subprocess.run(cmd, check=True)
+    subprocess.run(cmd, stdout=logfile, check=True)
     cmd = [
         str(colmap_path),
         'exhaustive_matcher',
@@ -101,10 +101,10 @@ def extract_and_match_sift(colmap_path, database_path, image_dir):
         '1',
     ]
     print(' '.join(cmd))
-    subprocess.run(cmd, check=True)
+    subprocess.run(cmd, stdout=logfile, check=True)
 
 
-def run_triangulation(colmap_path, model_path, in_sparse_model, database_path, image_dir):
+def run_triangulation(colmap_path, model_path, in_sparse_model, database_path, image_dir, logfile=None):
     print('Running the triangulation...')
     model_path.mkdir(exist_ok=True, parents=True)
     cmd = [
@@ -122,10 +122,10 @@ def run_triangulation(colmap_path, model_path, in_sparse_model, database_path, i
         '1',
     ]
     print(' '.join(cmd))
-    subprocess.run(cmd, check=False)
+    subprocess.run(cmd, stdout=logfile, check=False)
 
 
-def run_patch_match(colmap_path, sparse_model: Path, image_dir: Path, dense_model: Path):
+def run_patch_match(colmap_path, sparse_model: Path, image_dir: Path, dense_model: Path, logfile=None):
     print('Running patch match...')
     assert sparse_model.exists()
     dense_model.mkdir(parents=True, exist_ok=True)
@@ -142,7 +142,7 @@ def run_patch_match(colmap_path, sparse_model: Path, image_dir: Path, dense_mode
         '1',
     ]
     print(' '.join(cmd))
-    subprocess.run(cmd, check=False)
+    subprocess.run(cmd, stdout=logfile, check=False)
     cmd = [
         str(colmap_path),
         'patch_match_stereo',
@@ -152,11 +152,11 @@ def run_patch_match(colmap_path, sparse_model: Path, image_dir: Path, dense_mode
         '1',
     ]
     print(' '.join(cmd))
-    subprocess.run(cmd, check=False)
+    subprocess.run(cmd, stdout=logfile, check=False)
 
 
 def dump_images(in_image, image_dir, image_name='demo_colmap.png'):
-    print(f'[INFO] in_image shape: {in_image.shape}')               # (256, 4096, 3)
+    # print(f'[INFO] in_image shape: {in_image.shape}')               # (256, 4096, 3)
     imgs = np.stack(np.split(in_image, NUM_IMAGES, axis=1), axis=0) # (NUM_IMAGES, 256, 256, 3)
     for index in range(NUM_IMAGES):
         Image.fromarray(imgs[index].astype(np.uint8)).save(f'{str(image_dir)}/{index:03}.png')
@@ -217,30 +217,31 @@ def patch_match_with_known_poses(in_image, project_dir, colmap_path='colmap'):
     sparse_dir.mkdir(exist_ok=True, parents=True)
     in_sparse_dir.mkdir(exist_ok=True, parents=True)
     dense_dir.mkdir(exist_ok=True, parents=True)
+    with open(Path(f'{str(project_dir)}/colmap.log'), "w") as logfile:
+        dump_images(in_image, image_dir)
+        build_db_known_poses_fixed(db_path, in_sparse_dir)
+        extract_and_match_sift(colmap_path, db_path, image_dir, logfile=logfile)
+        run_triangulation(colmap_path, sparse_dir, in_sparse_dir, db_path, image_dir, logfile=logfile)
+        run_patch_match(colmap_path, sparse_dir, image_dir, dense_dir, logfile=logfile)
 
-    dump_images(in_image, image_dir)
-    build_db_known_poses_fixed(db_path, in_sparse_dir)
-    extract_and_match_sift(colmap_path, db_path, image_dir)
-    run_triangulation(colmap_path, sparse_dir, in_sparse_dir, db_path, image_dir)
-    run_patch_match(colmap_path, sparse_dir, image_dir, dense_dir)
+        # fuse
+        cmd = [
+            str(colmap_path),
+            'stereo_fusion',
+            '--workspace_path',
+            f'{project_dir}/dense',
+            '--workspace_format',
+            'COLMAP',
+            '--input_type',
+            'geometric',
+            '--output_path',
+            f'{project_dir}/points.ply',
+            '--log_level',
+            '1',
+        ]
+        print(' '.join(cmd))
 
-    # fuse
-    cmd = [
-        str(colmap_path),
-        'stereo_fusion',
-        '--workspace_path',
-        f'{project_dir}/dense',
-        '--workspace_format',
-        'COLMAP',
-        '--input_type',
-        'geometric',
-        '--output_path',
-        f'{project_dir}/points.ply',
-        '--log_level',
-        '1',
-    ]
-    print(' '.join(cmd))
-    subprocess.run(cmd, check=False)
+        subprocess.run(cmd, stdout=logfile, check=False)
 
 
 def main():

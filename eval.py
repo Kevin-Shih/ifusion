@@ -125,7 +125,7 @@ def eval_pose_all(config, scenes, ids, wb_run: Optional[wandb.Run]):
             config.data.scene = scene
             pose_err = eval_pose(**config.data)
             metric.append(pose_err)
-            metric_dict[scene] = pose_err
+            metric_dict[scene] = pose_err.squeeze().tolist()
         else:
             metric_dict[scene] = {}
             for id in ids:
@@ -134,7 +134,7 @@ def eval_pose_all(config, scenes, ids, wb_run: Optional[wandb.Run]):
                 config.data.id = id
                 pose_err = eval_pose(**config.data)
                 metric.append(pose_err)
-                metric_dict[scene][id] = pose_err
+                metric_dict[scene][id] = pose_err.squeeze().tolist()
     # print(f"[INFO] metric shape: {len(metric)} x {metric[0].shape}")
     metric = np.concatenate(metric, axis=0)
     # print(f"[INFO] metric shape after:  {metric.shape}")
@@ -174,11 +174,7 @@ def eval_nvs_all(config, scenes, ids, wb_run: Optional[wandb.Run]):
             config.data.id = id
             nvs_err = eval_nvs(**config.data)
             metric.append(nvs_err)
-            metric_dict[scene] = {
-                'PSNR': nvs_err[0],
-                'SSIM': nvs_err[1],
-                'LPIPS': nvs_err[2],
-            }
+            metric_dict[scene] = nvs_err
     metric = np.array(metric)
     np.savez(f"{config.data.nvs_root}/nvs_{config.data.name}.npz", metric)
     with open(f"{config.data.nvs_root}/nvs_{config.data.name}.json", "w") as f:
@@ -260,7 +256,7 @@ def eval_colmap_all(config, scenes, ids, wb_run: Optional[wandb.Run]):
     # metric = np.concatenate(metric, axis=0)
     metric = np.array(metric)
     np.savez(f"{config.data.nvs_root}/colmap_{config.data.name}.npz", metric)
-    with open(f"{config.data.exp_root}/colmap_{config.data.name}.json", "w") as f:
+    with open(f"{config.data.nvs_root}/colmap_{config.data.name}.json", "w") as f:
         json.dump(metric_dict, f, indent=4)
     colmap_mean = np.mean(metric[:])
     if wb_run:
@@ -286,30 +282,42 @@ def eval_consitency_2view_all(config, scenes, ids, wb_run: Optional[wandb.Run]):
             metric.append(nvs_score)
             metric_dict[scene] = nvs_score
     metric = np.array(metric)
-    np.savez(f"{config.data.nvs_root}/colmap_{config.data.name}.npz", metric)
-    with open(f"{config.data.exp_root}/colmap_{config.data.name}.json", "w") as f:
+    np.savez(f"{config.data.nvs_root}/2view_nvs{config.data.name}.npz", metric)
+    with open(f"{config.data.nvs_root}/2view_nvs{config.data.name}.json", "w") as f:
         json.dump(metric_dict, f, indent=4)
     if wb_run:
         PSNR_p25, PSNR_p50, PSNR_p75 = np.percentile(metric[:, 0], [25, 50, 75])
         SSIM_p25, SSIM_p50, SSIM_p75 = np.percentile(metric[:, 1], [25, 50, 75])
         LPIPS_p25, LPIPS_p50, LPIPS_p75 = np.percentile(metric[:, 2], [25, 50, 75])
         PSNR_mean, SSIM_mean, LPIPS_mean = np.mean(metric, axis=0)
+        wb_run.summary.__delitem__('Consistentcy/LPIPS (mean)')
+        wb_run.summary.__delitem__("Consistentcy/LPIPS (median)")
+        wb_run.summary.__delitem__("Consistentcy/LPIPS (p25)")
+        wb_run.summary.__delitem__("Consistentcy/LPIPS (p75)")
+        wb_run.summary.__delitem__("Consistentcy/PSNR  (mean)")
+        wb_run.summary.__delitem__("Consistentcy/PSNR (median)")
+        wb_run.summary.__delitem__("Consistentcy/PSNR (p25)")
+        wb_run.summary.__delitem__("Consistentcy/PSNR (p75)")
+        wb_run.summary.__delitem__("Consistentcy/SSIM  (mean)")
+        wb_run.summary.__delitem__("Consistentcy/SSIM (median)")
+        wb_run.summary.__delitem__("Consistentcy/SSIM (p25)")
+        wb_run.summary.__delitem__("Consistentcy/SSIM (p75)")
         wb_run.summary.update({
-            'Consistentcy/PSNR (p25)': PSNR_p25,
-            'Consistentcy/PSNR (median)': PSNR_p50,
-            'Consistentcy/PSNR (p75)': PSNR_p75,
-            'Consistentcy/SSIM (p25)': SSIM_p25,
-            'Consistentcy/SSIM (median)': SSIM_p50,
-            'Consistentcy/SSIM (p75)': SSIM_p75,
-            'Consistentcy/LPIPS (p25)': LPIPS_p25,
-            'Consistentcy/LPIPS (median)': LPIPS_p50,
-            'Consistentcy/LPIPS (p75)': LPIPS_p75,
-            'Consistentcy/PSNR  (mean)': PSNR_mean,
-            'Consistentcy/SSIM  (mean)': SSIM_mean,
-            'Consistentcy/LPIPS (mean)': LPIPS_mean,
+            'Consistency/PSNR(p25)': PSNR_p25,
+            'Consistency/PSNR(median)': PSNR_p50,
+            'Consistency/PSNR(p75)': PSNR_p75,
+            'Consistency/SSIM(p25)': SSIM_p25,
+            'Consistency/SSIM(median)': SSIM_p50,
+            'Consistency/SSIM(p75)': SSIM_p75,
+            'Consistency/LPIPS(p25)': LPIPS_p25,
+            'Consistency/LPIPS(median)': LPIPS_p50,
+            'Consistency/LPIPS(p75)': LPIPS_p75,
+            'Consistency/PSNR(mean)': PSNR_mean,
+            'Consistency/SSIM(mean)': SSIM_mean,
+            'Consistency/LPIPS(mean)': LPIPS_mean,
         })
     print(
-        f"Consistentcy/PSNR: {metric[:, 0].mean():.3f}, SSIM: {metric[:, 1].mean():.3f}, LPIPS: {metric[:, 2].mean():.3f}"
+        f"Consistency/PSNR: {metric[:, 0].mean():.3f}, SSIM: {metric[:, 1].mean():.3f}, LPIPS: {metric[:, 2].mean():.3f}"
     )
 
 
@@ -328,6 +336,8 @@ def main(config, mode):
         eval_nvs_all(config, scenes, ids=["0,1"], wb_run=wb_run)
     if mode[2]:
         eval_consistency_all(config, scenes, ids=["0,1"], wb_run=wb_run)
+    if mode[4]:
+        eval_consitency_2view_all(config, scenes, ids=["0,1"], wb_run=wb_run)
     if mode[3]:
         eval_colmap_all(config, scenes, ids=["0,1"], wb_run=wb_run)
     if wb_run:
@@ -341,10 +351,11 @@ if __name__ == "__main__":
     parser.add_argument('-n', "--nvs", action="store_true")
     parser.add_argument('-c', "--consistency", action="store_true")
     parser.add_argument('-3', "--colmap", action="store_true")
+    parser.add_argument('-4', "--my_consistency", action="store_true")
     parser.add_argument('-g', '--gpu_id', type=str, default='4')
     args, extras = parser.parse_known_args()
     config = load_config(args.config, cli_args=extras)
 
     set_random_seed(config[0].seed)
     os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu_id
-    main(config, [args.pose, args.nvs, args.consistency, args.colmap])
+    main(config, [args.pose, args.nvs, args.consistency, args.colmap, args.my_consistency])

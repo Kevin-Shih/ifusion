@@ -5,8 +5,8 @@ log:
   # group_name: 'scene0_all'
   # group_name: 'scene0,2_id0,3'
   # group_name: 'my_subset'
-  run_name: 'Render16_riginal_zero123'
-  run_path: 69zpvc1r
+  run_name: 'Render16_riginal_zero123_2'
+  run_path: 678vf76w
 
 data:
   name: GSO # OO3D

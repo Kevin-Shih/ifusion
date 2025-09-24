@@ -328,30 +328,37 @@ def my_finetune(
     optimizer = parse_optimizer(args.optimizer, model.require_grad_params)
     scheduler = parse_scheduler(args.scheduler, optimizer)
     train_loader = iter(train_loader)
+    ddpm_steps = args.get('ddpm_steps', None)
+    if ddpm_steps and len(ddpm_steps) == 2:
+        print('[Info] DDIM step range:', ddpm_steps[0], ddpm_steps[1])
+        ddpm_step_fn = lambda step: int(ddpm_steps[0] - step * (ddpm_steps[0] - ddpm_steps[1]) / args.max_step)
+    else:
+        print('[Info] DDIM step:', ddpm_steps)
+        ddpm_step_fn = lambda step: int(ddpm_steps[0])
+
+    grad_accumelation = args.get('gradient_accumelation', 1)
     with trange(args.max_step, ncols=130) as pbar:
         for step in pbar:
             optimizer.zero_grad()
-
-            batch = next(train_loader)
-            batch = {k: v.to(model.device) for k, v in batch.items()}
-            noise_a, noise_b, noise, nvs_latent_a, nvs_latent_b = model(batch, ddpm_step=args.get('ddpm_steps', None))
-            consist_loss = torch.nn.functional.mse_loss(noise_a, noise_b, reduction='mean')                                       # or cosine?
-            noise_pred_loss = torch.nn.functional.mse_loss(
-                noise_a, noise, reduction='mean'
-            ) + torch.nn.functional.mse_loss(
-                noise_b, noise, reduction='mean'
-            )
-            consist_loss = args.consist_loss_ratio * consist_loss
-            noise_pred_loss = args.pred_loss_ratio * noise_pred_loss
-            loss = consist_loss + noise_pred_loss
+            for _ in range(grad_accumelation):
+                batch = next(train_loader)
+                batch = {k: v.to(model.device) for k, v in batch.items()}
+                noise_a, noise_b, noise, nvs_latent_a, nvs_latent_b = model(batch, ddpm_step=ddpm_step_fn(step))
+                consist_loss = torch.nn.functional.mse_loss(noise_a, noise_b, reduction='mean')                                   # or cosine?
+                noise_pred_loss = torch.nn.functional.mse_loss(
+                    noise_a, noise, reduction='mean'
+                ) + torch.nn.functional.mse_loss(
+                    noise_b, noise, reduction='mean'
+                )
+                loss = (
+                    consist_loss * args.consist_loss_ratio + noise_pred_loss * args.pred_loss_ratio
+                ) / grad_accumelation
+                loss.backward()
+            optimizer.step()
+            scheduler.step()
             pbar.set_description(
                 f"step: {step}, loss: {loss.item():.4f}, c_loss: {consist_loss.item():.4f}, p_loss: {noise_pred_loss.item():.4f}"
             )
-            loss.backward()
-
-            optimizer.step()
-            scheduler.step()
-            # scheduler.step(loss)
 
     os.makedirs(os.path.dirname(lora_ckpt_fp), exist_ok=True)
     model.save_lora(lora_ckpt_fp)
@@ -394,6 +401,13 @@ def my_finetune_general(
     train_loader = train_dataset.loader(args.batch_size)
     optimizer = parse_optimizer(args.optimizer, model.require_grad_params)
     scheduler = parse_scheduler(args.scheduler, optimizer)
+    ddpm_milestones = args.scheduler.args.milestones
+    ddpm_steps = args.get('ddpm_steps', None)
+    if ddpm_steps and len(ddpm_steps) <= len(ddpm_milestones):
+        ddpm_steps.extend(ddpm_steps[-1] * (len(ddpm_milestones) + 1 - len(ddpm_steps)))
+    print('[Info] DDIM step range:', ddpm_steps)
+    ddpm_steps = iter(ddpm_steps)
+    ddpm_step = next(ddpm_steps)
 
     train_loader = iter(train_loader)
     grad_accumelation = args.get('gradient_accumelation', 1)
@@ -404,9 +418,7 @@ def my_finetune_general(
             for _ in range(grad_accumelation):
                 batch = next(train_loader)
                 batch = {k: v.to(model.device) for k, v in batch.items()}
-                noise_a, noise_b, noise, nvs_latent_a, nvs_latent_b = model(
-                    batch, ddpm_step=args.get('ddpm_steps', None)
-                )
+                noise_a, noise_b, noise, nvs_latent_a, nvs_latent_b = model(batch, ddpm_step=ddpm_step)
                 consist_loss = torch.nn.functional.mse_loss(noise_a, noise_b, reduction='mean')
                 noise_pred_loss = torch.nn.functional.mse_loss(
                     noise_a, noise, reduction='mean'
@@ -439,7 +451,7 @@ def my_finetune_general(
             # scheduler.step(loss)
 
             pbar.set_description(
-                f"step: {step}, loss: {loss.item()*grad_accumelation:.4f}, c_loss: {consist_loss.item():.4f}, p_loss: {noise_pred_loss.item():.4f}"
+                f"ddpm_step: {ddpm_step}, loss: {loss.item()*grad_accumelation:.4f}, c_loss: {consist_loss.item():.4f}, p_loss: {noise_pred_loss.item():.4f}"
             )
             wb_run.log({
                 "train/loss": loss.item(),
@@ -460,6 +472,8 @@ def my_finetune_general(
                     "eval/SSIM": SSIM_mean,
                     "eval/LPIPS": LPIPS_mean,
                 }, step=step + 1)
+            if step in ddpm_milestones:
+                ddpm_step = next(ddpm_steps)
     model.save_lora(config.data.lora_ckpt_fp)
     if not reuse_lora:
         model.remove_lora()
@@ -618,10 +632,9 @@ def inference_for_consist(
             target_replace_module=lora_target_replace_module,
         )
 
-    test_dataset = SingleImageInferenceDataset
     generate_fn = model.generate_from_tensor
     # from view 0
-    test_dataset = test_dataset(
+    test_dataset = SingleImageInferenceDataset(
         image_dir=image_dir,
         transform_fp=transform_fp,
         test_transform_fp=test_transform_fp,
@@ -640,7 +653,7 @@ def inference_for_consist(
             distance=batch["distance"],
         )
     # from view 1
-    test_dataset = test_dataset(
+    test_dataset = SingleImageInferenceDataset(
         image_dir=image_dir,
         transform_fp=transform_fp,
         test_transform_fp=test_transform_fp,
