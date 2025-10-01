@@ -46,14 +46,18 @@ def eval_nvs(demo_fp, test_image_dir, test_transform_fp, **kwargs) -> tuple[floa
     return psnr, ssim, lpips
 
 
-def eval_2view_nvs(demo_fp: str, **kwargs) -> tuple[float, float, float]:
+def eval_2view_nvs(demo_fp: str, use_all_views: bool = False, **kwargs) -> tuple[float, float, float]:
     fp1 = demo_fp.replace('.png', '_0_16view.png')
     fp2 = demo_fp.replace('.png', '_1_16view.png')
     from util.criterion import lpips_fn, psnr_fn, ssim_fn
     pred = load_image(fp1, resize=False, to_clip=False, verbose=False)
-    pred = torch.cat(torch.chunk(pred, 16, dim=-1)[::2])
     pred2 = load_image(fp2, resize=False, to_clip=False, verbose=False)
-    pred2 = torch.cat(torch.chunk(pred2, 16, dim=-1)[::2])
+    if use_all_views:
+        pred = torch.cat(torch.chunk(pred, 16, dim=-1))
+        pred2 = torch.cat(torch.chunk(pred2, 16, dim=-1))
+    else:
+        pred = torch.cat(torch.chunk(pred, 16, dim=-1)[::2])
+        pred2 = torch.cat(torch.chunk(pred2, 16, dim=-1)[::2])
     pred2 = pred2.to(pred.device)
 
     psnr = psnr_fn(pred, pred2).item()
@@ -272,17 +276,24 @@ def eval_colmap_all(config, scenes, ids, wb_run: Optional[wandb.Run]):
 
 def eval_consitency_2view_all(config, scenes, ids, wb_run: Optional[wandb.Run]):
     metric = []
+    metric_allview = []
     metric_dict = {}
     for scene in scenes:
         for id in ids:
             print(f"[INFO] Evaluating A,B view results \'{scene}\':{id}")
             config.data.scene = scene
             config.data.id = id
-            nvs_score = eval_2view_nvs(config.inference.demo_fp)
+            nvs_score = eval_2view_nvs(config.inference.demo_fp, False)
+            nvs_score_allview = eval_2view_nvs(config.inference.demo_fp, True)
             metric.append(nvs_score)
-            metric_dict[scene] = nvs_score
+            metric_allview.append(nvs_score_allview)
+            metric_dict[scene] = {'8views': nvs_score, '16views': nvs_score_allview}
     metric = np.array(metric)
-    np.savez(f"{config.data.nvs_root}/2view_nvs{config.data.name}.npz", metric)
+    np.savez(
+        f"{config.data.nvs_root}/2view_nvs{config.data.name}.npz",
+        view8_consistency=metric,
+        view16_consistency=metric_allview
+    )
     with open(f"{config.data.nvs_root}/2view_nvs{config.data.name}.json", "w") as f:
         json.dump(metric_dict, f, indent=4)
     if wb_run:
@@ -290,18 +301,8 @@ def eval_consitency_2view_all(config, scenes, ids, wb_run: Optional[wandb.Run]):
         SSIM_p25, SSIM_p50, SSIM_p75 = np.percentile(metric[:, 1], [25, 50, 75])
         LPIPS_p25, LPIPS_p50, LPIPS_p75 = np.percentile(metric[:, 2], [25, 50, 75])
         PSNR_mean, SSIM_mean, LPIPS_mean = np.mean(metric, axis=0)
-        wb_run.summary.__delitem__('Consistentcy/LPIPS (mean)')
-        wb_run.summary.__delitem__("Consistentcy/LPIPS (median)")
-        wb_run.summary.__delitem__("Consistentcy/LPIPS (p25)")
-        wb_run.summary.__delitem__("Consistentcy/LPIPS (p75)")
-        wb_run.summary.__delitem__("Consistentcy/PSNR  (mean)")
-        wb_run.summary.__delitem__("Consistentcy/PSNR (median)")
-        wb_run.summary.__delitem__("Consistentcy/PSNR (p25)")
-        wb_run.summary.__delitem__("Consistentcy/PSNR (p75)")
-        wb_run.summary.__delitem__("Consistentcy/SSIM  (mean)")
-        wb_run.summary.__delitem__("Consistentcy/SSIM (median)")
-        wb_run.summary.__delitem__("Consistentcy/SSIM (p25)")
-        wb_run.summary.__delitem__("Consistentcy/SSIM (p75)")
+        PSNR_p50_all, SSIM_p50_all, LPIPS_p50_all = np.median(metric_allview, axis=0)
+        PSNR_mean_all, SSIM_mean_all, LPIPS_mean_all = np.mean(metric_allview, axis=0)
         wb_run.summary.update({
             'Consistency/PSNR(p25)': PSNR_p25,
             'Consistency/PSNR(median)': PSNR_p50,
@@ -315,6 +316,12 @@ def eval_consitency_2view_all(config, scenes, ids, wb_run: Optional[wandb.Run]):
             'Consistency/PSNR(mean)': PSNR_mean,
             'Consistency/SSIM(mean)': SSIM_mean,
             'Consistency/LPIPS(mean)': LPIPS_mean,
+            'Consistency/PSNR_16view(median)': PSNR_p50_all,
+            'Consistency/SSIM_16view(median)': SSIM_p50_all,
+            'Consistency/LPIPS_16view(median)': LPIPS_p50_all,
+            'Consistency/PSNR_16view(mean)': PSNR_mean_all,
+            'Consistency/SSIM_16view(mean)': SSIM_mean_all,
+            'Consistency/LPIPS_16view(mean)': LPIPS_mean_all,
         })
     print(
         f"Consistency/PSNR: {metric[:, 0].mean():.3f}, SSIM: {metric[:, 1].mean():.3f}, LPIPS: {metric[:, 2].mean():.3f}"

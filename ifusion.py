@@ -51,8 +51,8 @@ def dualway_optimize_pose_loop(
                                                                                         # torch.norm(T_[:3, 3]) - default_radius
             )                                                                           # distance is the offset from the default radius, but why sin and times scale?
 
-            # idx = [0, 1] if torch.rand(1) < 0.5 else [1, 0] # on every step randomly choose train r2q or q2r. Why not both?
-            idx = [0, 1]                                     # on every step randomly choose train r2q or q2r. Why not both?
+            # idx = [0, 1] if torch.rand(1) < 0.5 else [1, 0] # on every step randomly choose. Why not both?
+            idx = [0, 1]
             batch = {
                 "image_cond":
                     image_cond[idx],
@@ -92,7 +92,7 @@ def dualway_optimize_pose_loop(
             total_loss = total_loss + inv_loss
 
             pbar.set_description(
-                f"lr: {scheduler.get_last_lr()[0]:.3f}, total_loss: {total_loss:.3f}, loss: {loss.item():.2f}, theta: {theta.rad2deg().item():.2f}, azimuth: {azimuth.rad2deg().item():.2f}, distance: {distance.item():.2f}"
+                f"total_loss: {total_loss:.3f}, loss: {loss.item():.2f}, theta: {theta.rad2deg().item():.2f}, azimuth: {azimuth.rad2deg().item():.2f}, distance: {distance.item():.2f}"
             )
             (loss + inv_loss).backward()
             optimizer.step()

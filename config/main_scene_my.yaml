@@ -5,7 +5,7 @@ log:
   # group_name: 'scene0_all'
   group_name: 'all'
   run_name: 'Render16_FixScene_my_${finetune.args.consist_loss_ratio}:${finetune.args.pred_loss_ratio}_step${finetune.args.ddpm_steps}_50it_accum2'
-  run_path: i9sxxo5u
+  run_path: v1rhubmo
 
 data:
   name: GSO # OO3D

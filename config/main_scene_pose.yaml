@@ -1,9 +1,12 @@
 seed: 42
 
 log:
-
+  group_name: 'OO3D'
+  run_name: 'Eval_PoseOnly_Original'
+  run_path: 
 data:
-  name: GSO # OO3D
+  # name: GSO 
+  name: OO3D
   root_dir: rendering
 
   scene: 3D_Dollhouse_Happy_Brother
@@ -50,7 +53,7 @@ pose:
   default_latlon: ['${pose.default_theta}', '${pose.default_azimuth}', '${pose.default_radius}']
   search_radius_range: 0.8
   use_step_ratio: true
-  use_dualway: false
+  use_dualway: true
 
   args:
     max_step: 100
