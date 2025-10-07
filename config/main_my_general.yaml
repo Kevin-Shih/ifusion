@@ -32,7 +32,8 @@ data:
   # nvs exp
   nvs_root: ${data.exp_root}
   nvs_dir: ${data.nvs_root}/${data.name}/${data.scene}
-  lora_ckpt_fp: ${data.nvs_dir}/lora.ckpt
+  lora_ckpt_fp: ${data.nvs_root}/${data.name}/lora.ckpt
+  resume_ckpt_fp: ${data.nvs_dir}/lora/lora_900.ckpt
   demo_fp:  ${data.nvs_dir}/demo.png
 
 model:
@@ -104,8 +105,9 @@ finetune:
 inference:
   image_dir: ${data.image_dir}
   transform_fp: ${data.transform_fp}
-  test_transform_fp: null
+  test_transform_fp: ${data.test_transform_fp}
   lora_ckpt_fp: ${data.lora_ckpt_fp}
+  resume_ckpt_fp: ${data.resume_ckpt_fp}
   demo_fp: ${data.demo_fp}
   lora_rank: ${finetune.lora_rank}
   lora_target_replace_module: ${finetune.lora_target_replace_module}

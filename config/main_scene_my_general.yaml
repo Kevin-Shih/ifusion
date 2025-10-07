@@ -3,12 +3,14 @@ seed: 42
 log:
   # group_name: 'my_subset_perm52'
   # group_name: 'scene0_all'
-  group_name: 'all'
-  run_name: 'Render1150_FixScene_myGeneral_${finetune.args.consist_loss_ratio}:${finetune.args.pred_loss_ratio}_step${finetune.args.ddpm_steps}_accum8'
-  run_path: alr3xfjs
+  group_name: 'OO3D'
+  # run_name: 'Render1150_FixScene_myGeneral_${finetune.args.consist_loss_ratio}:${finetune.args.pred_loss_ratio}_step${finetune.args.ddpm_steps}_accum8'
+  run_name: 'Render500_OO3D_FromGSO900_General_step${finetune.args.ddpm_steps}_accum8'
+  run_path: 
 
 data:
-  name: GSO # OO3D
+  # name: GSO
+  name: OO3D
   root_dir: rendering
 
   scene: 3D_Dollhouse_Happy_Brother
@@ -33,6 +35,7 @@ data:
   nvs_root: ${data.exp_root}
   nvs_dir: ${data.nvs_root}/${data.name}/${data.scene}
   lora_ckpt_fp: ${data.nvs_root}/${data.name}/lora.ckpt
+  resume_ckpt_fp: null
   demo_fp:  ${data.nvs_dir}/demo.png
 
 model:
@@ -79,11 +82,12 @@ finetune:
   lora_target_replace_module: [CrossAttention, GEGLU]
 
   args:
-    max_step: 3000
+    resume_ckpt_fp: ${data.resume_ckpt_fp}
+    max_step: 500
     batch_size: 8
     consist_loss_ratio: 2
     pred_loss_ratio: 1
-    ddpm_steps: [600, 300, 100]
+    ddpm_steps: [600]
     gradient_accumelation: 8
     eval_steps: 50
     optimizer:
@@ -100,13 +104,13 @@ finetune:
     scheduler:
       name: MultiStepLR
       args:
-        milestones: [500, 1500]
+        milestones: [50, 150]
         gamma: 0.1
 
 inference:
   image_dir: ${data.image_dir}
   transform_fp: ${data.scene_transform_fp}
-  test_transform_fp: null
+  test_transform_fp: ${data.test_transform_fp}
   lora_ckpt_fp: ${data.lora_ckpt_fp}
   demo_fp: ${data.demo_fp}
   lora_rank: ${finetune.lora_rank}

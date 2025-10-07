@@ -379,6 +379,7 @@ def my_finetune_general(
         exit(1)
     args: dict = config.finetune.args
     model.inject_lora(
+        ckpt_fp=args.get('resume_ckpt_fp', None),
         rank=config.finetune.lora_rank,
         target_replace_module=config.finetune.lora_target_replace_module,
     )
@@ -389,9 +390,14 @@ def my_finetune_general(
     # scene_idxs = torch.randint(0, len(scenes), (args.batch_size,), device=model.device)
     # img_idxs, next_img_idxs = torch.randint(0, len(ids), (2), device=model.device)
     # next_img_idxs[1] = img_idxs[1]  # make sure the second image has the same idx for all scenes
-
-    train_dataset = MyFinetuneAllSceneIterableDataset(len(scenes))
-    for scene in scenes:
+    if config.data.name == 'Objaverse':
+        train_scenes = scenes[:-7818]
+        eval_scenes = scenes[-7818::10]
+    else:
+        train_scenes = scenes
+        eval_scenes = scenes[::10]
+    train_dataset = MyFinetuneAllSceneIterableDataset(len(train_scenes))
+    for scene in train_scenes:
         for id in ids:
             config.data.scene = scene
             config.data.id = id
@@ -403,11 +409,11 @@ def my_finetune_general(
     scheduler = parse_scheduler(args.scheduler, optimizer)
     ddpm_milestones = args.scheduler.args.milestones
     ddpm_steps = args.get('ddpm_steps', None)
-    if ddpm_steps and len(ddpm_steps) <= len(ddpm_milestones):
-        ddpm_steps.extend(ddpm_steps[-1] * (len(ddpm_milestones) + 1 - len(ddpm_steps)))
+    # if ddpm_steps and len(ddpm_steps) <= len(ddpm_milestones):
+    #     ddpm_steps.extend(ddpm_steps[-1] * (len(ddpm_milestones) + 1 - len(ddpm_steps)))
     print('[Info] DDIM step range:', ddpm_steps)
-    ddpm_steps = iter(ddpm_steps)
-    ddpm_step = next(ddpm_steps)
+    ddpm_steps_iter = iter(ddpm_steps)
+    ddpm_step = next(ddpm_steps_iter)
 
     train_loader = iter(train_loader)
     grad_accumelation = args.get('gradient_accumelation', 1)
@@ -463,7 +469,7 @@ def my_finetune_general(
 
             if (step + 1) % eval_steps == 0:
                 lora_ckpt_fp = f'{config.data.nvs_root}/{config.data.name}/lora/lora_{step + 1}.ckpt'
-                metric = ckpt_infer_and_eval(model, config, scenes, ids, lora_ckpt_fp=lora_ckpt_fp)
+                metric = ckpt_infer_and_eval(model, config, eval_scenes, ids, lora_ckpt_fp=lora_ckpt_fp)
                 PSNR_mean = np.mean(metric[:, 0])
                 SSIM_mean = np.mean(metric[:, 1])
                 LPIPS_mean = np.mean(metric[:, 2])
@@ -473,7 +479,7 @@ def my_finetune_general(
                     "eval/LPIPS": LPIPS_mean,
                 }, step=step + 1)
             if step in ddpm_milestones:
-                ddpm_step = next(ddpm_steps)
+                ddpm_step = next(ddpm_steps_iter, ddpm_steps[-1])
     model.save_lora(config.data.lora_ckpt_fp)
     if not reuse_lora:
         model.remove_lora()
@@ -483,15 +489,15 @@ def ckpt_infer_and_eval(model, config, scenes, ids, lora_ckpt_fp):
     os.makedirs(os.path.dirname(lora_ckpt_fp), exist_ok=True)
     print()
     model.save_lora(lora_ckpt_fp)
-    print(f"[INFO] Evaluating 1/10 scenes")
+    # print(f"[INFO] Evaluating 1/10 scenes")
     metric = []
     # config.data.lora_ckpt_fp = lora_ckpt_fp
     from eval import eval_nvs
-    for scene in scenes[::10]: # infer 1/10 scenes
+    for scene in scenes:                                          # infer 1/10 scenes
         for id in ids:
             config.data.scene = scene
             config.data.id = id
-            inference_all(model, **config.inference)
+            inference(model, reuse_lora=True, **config.inference) # inference if is objaverse should use testtransformfp
             metric.append(eval_nvs(**config.data))
     metric = np.array(metric)
     return metric
@@ -548,56 +554,6 @@ def inference(
 
     if lora_ckpt_fp and not reuse_lora:
         model.remove_lora()
-
-    os.makedirs(os.path.dirname(demo_fp), exist_ok=True)
-    out = rearrange(out_colmap[::2], "b c h w -> c h (b w)")
-    plot_image(out, fp=demo_fp)
-    out_colmap = rearrange(out_colmap, "b c h w -> c h (b w)")
-    plot_image(out_colmap, fp=demo_fp.replace('.png', '_colmap.png'))
-    print(f"[INFO] Saved image to {demo_fp} and {os.path.basename(demo_fp).replace('.png', '_colmap.png')}")
-    return out
-
-
-def inference_all(
-    model,
-    image_dir: str,
-    transform_fp: str,
-    test_transform_fp: str,
-    lora_ckpt_fp: str,
-    demo_fp: str,
-    lora_rank: int,
-    lora_target_replace_module: List[str],
-    use_single_view: bool,
-    use_multi_view_condition: bool,
-    n_views: int,
-    theta: float,
-    radius: float,
-    args,
-):
-    if not use_single_view and use_multi_view_condition:
-        test_dataset = MultiImageInferenceDataset
-        generate_fn = model.generate_from_tensor_multi_cond
-    else:
-        test_dataset = SingleImageInferenceDataset
-        generate_fn = model.generate_from_tensor
-
-    test_dataset = test_dataset(
-        image_dir=image_dir,
-        transform_fp=transform_fp,
-        test_transform_fp=test_transform_fp,
-        n_views=n_views,
-        theta=theta,
-        radius=radius
-    )
-    test_loader = test_dataset.loader(args.batch_size)
-    for batch in test_loader:
-        batch = {k: v.to(model.device) for k, v in batch.items()}
-        out_colmap = generate_fn(
-            image=batch["image_cond"],
-            theta=batch["theta"],
-            azimuth=batch["azimuth"],
-            distance=batch["distance"],
-        )
 
     os.makedirs(os.path.dirname(demo_fp), exist_ok=True)
     out = rearrange(out_colmap[::2], "b c h w -> c h (b w)")

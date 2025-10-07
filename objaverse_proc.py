@@ -60,31 +60,48 @@ def test_imgs(valid_path):
             ]), valid_path[step]
 
 
+def procees_data2(step, dir):
+    scene_dir = os.path.join("rendering/Objaverse/", dir)
+    tmp_dst = os.path.join(scene_dir, 'tmp_test')
+    os.symlink('train', tmp_dst, target_is_directory=True)
+    os.replace(tmp_dst, os.path.join(scene_dir, 'test'))
+
+
 if __name__ == "__main__":
-    with open(f"rendering/Objaverse/my_valid_paths.json") as f:
+    with open(f"rendering/Objaverse/valid_paths.json") as f:
         valid_path: list = json.load(f)
     # 772000 as train 870 as eval
-    train_or_not = []
-    with tqdm.trange(len(valid_path[:]), ncols=100) as pbar:
-        with ThreadPoolExecutor(max_workers=32) as executor:
-            futures = [executor.submit(procees_data, step, valid_path[step], pbar) for step in pbar]
-            for future in as_completed(futures):
-                pbar.update(1)
-                train_or_not.append(future.result())
-        print(train_or_not[-5:])
-    test = np.zeros(16, dtype=np.int32)
-    dirs = test_imgs(valid_path)
-    print(type(valid_path), len(valid_path))
-    remove_list = []
-    for dir in dirs:
-        test[dir[0]] += 1
-        if dir[0] < 12:
-            remove_list.append(dir[1])
+    # train_or_not = []
+    # with tqdm.trange(len(valid_path[:]), ncols=100) as pbar:
+    #     with ThreadPoolExecutor(max_workers=8) as executor:
+    #         futures = [executor.submit(procees_data, step, valid_path[step], pbar) for step in pbar]
+    #         for future in as_completed(futures):
+    #             pbar.update(1)
+    #             train_or_not.append(future.result())
+    #     print(train_or_not[-5:])
+    # test = np.zeros(16, dtype=np.int32)
+    # dirs = test_imgs(valid_path)
+    # print(type(valid_path), len(valid_path))
+    # remove_list = []
+    # for dir in dirs:
+    #     test[dir[0]] += 1
+    #     if dir[0] < 12:
+    #         remove_list.append(dir[1])
     # for it in remove_list:
     #     valid_path.remove(it)
     # print(type(valid_path), len(valid_path))
     # with open(f"rendering/Objaverse/my_valid_paths.json", mode='w') as f:
     #     json.dump(valid_path, f)
-    for i in range(1, 16):
-        if test[i] > 0:
-            print(f'Dir with {i:2d} images = {test[i]:6d}', end=', ')
+    # for i in range(1, 16):
+    #     if test[i] > 0:
+    #         print(f'Dir with {i:2d} images = {test[i]:6d}', end=', ')
+
+    # with tqdm.trange(len(valid_path), ncols=100) as pbar:
+    #     with ThreadPoolExecutor(max_workers=8) as executor:
+    #         futures = [executor.submit(procees_data2, step, valid_path[step]) for step in pbar]
+    #         for future in as_completed(futures):
+    #             pbar.update(1)
+
+    with tqdm.trange(len(valid_path), ncols=100) as pbar:
+        for step in pbar:
+            procees_data2(step, valid_path[step])

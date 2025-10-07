@@ -217,7 +217,7 @@ def patch_match_with_known_poses(in_image, project_dir, colmap_path='colmap'):
     sparse_dir.mkdir(exist_ok=True, parents=True)
     in_sparse_dir.mkdir(exist_ok=True, parents=True)
     dense_dir.mkdir(exist_ok=True, parents=True)
-    with open(Path(f'{str(project_dir)}/colmap.log'), "w") as logfile:
+    with open(Path(f'{str(project_dir)}/colmap.txt'), "w") as logfile:
         dump_images(in_image, image_dir)
         build_db_known_poses_fixed(db_path, in_sparse_dir)
         extract_and_match_sift(colmap_path, db_path, image_dir, logfile=logfile)

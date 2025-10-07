@@ -1,7 +1,8 @@
 seed: 42
 
 log:
-  group_name: 'all'
+  group_name: 'OO3D'
+  # group_name: 'GSO'
   # group_name: 'scene0,2_id0,3'
   # group_name: 'my_subset'
   run_name: 'Eval_PoseOnly2'

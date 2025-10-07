@@ -89,7 +89,7 @@ def gen_nvs_my_finetune_general(mode, model, config, scenes, ids, wb_run):
             rank=config.inference.lora_rank,
             target_replace_module=config.inference.lora_target_replace_module,
         )
-    for scene in scenes:
+    for scene in (scenes if config.data.name != 'Objaverse' else scenes[-7818:]):
         for id in ids:
             config.data.scene = scene
             config.data.id = id
@@ -113,13 +113,18 @@ def main(config, mode, gpu_ids):
             gen_nvs_my_finetune_general(mode[6:8], model, config, scenes, ids=["0,1"], wb_run=wb_run)
 
     config, conf_dict = config
-
-    perm = list(itertools.permutations(range(5), 2))
-    # perm = list(itertools.combinations(range(5), 2))
-    # perm = list(itertools.combinations(range(3), 2))
-    ids = [",".join(map(str, p)) for p in perm]
     gpu_ids = str2list(gpu_ids)
-    scenes = sorted(os.listdir(f"{config.data.root_dir}/{config.data.name}"))[0:]
+    if config.data.name == 'Objaverse':
+        perm = list(itertools.permutations(range(12), 2))
+        ids = [",".join(map(str, p)) for p in perm]
+        with open(f"{config.data.root_dir}/{config.data.name}/my_valid_paths.json") as f:
+            scenes: list = sorted(json.load(f))
+    else:
+        perm = list(itertools.permutations(range(5), 2))
+        # perm = list(itertools.combinations(range(5), 2))
+        ids = [",".join(map(str, p)) for p in perm]
+        scenes = sorted(os.listdir(f"{config.data.root_dir}/{config.data.name}"))[0:]
+        config.inference.test_transform_fp = None # reassure should be null except generalizable on Objaverse
     wb_run = start_wabdb(config, conf_dict, mode)
     print(f"[INFO] Found {len(scenes)} scenes")
 
