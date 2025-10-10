@@ -3,15 +3,14 @@ seed: 42
 log:
   # group_name: 'my_subset_perm52'
   # group_name: 'scene0_all'
-  group_name: 'OO3D'
-  # run_name: 'Render1150_FixScene_myGeneral_${finetune.args.consist_loss_ratio}:${finetune.args.pred_loss_ratio}_step${finetune.args.ddpm_steps}_accum8'
-  run_name: 'Render350_OO3D_FromGSO900_General_step${finetune.args.ddpm_steps}_newlr'
-  # run_name: 'OO3D_FromGSO900_General_step${finetune.args.ddpm_steps}_newlr3'
-  run_path: wwbqmwhi
+  group_name: 'GSO'
+  # group_name: 'OO3D'
+  run_name: 'SyncDreamer_GSO'
+  run_path: 
 
 data:
-  # name: GSO
-  name: OO3D
+  name: GSO
+  # name: OO3D
   root_dir: rendering
 
   scene: 3D_Dollhouse_Happy_Brother
@@ -29,22 +28,21 @@ data:
   exp_root: runs/scene_pose/pose_only2
   exp_dir: ${data.exp_root}/${data.name}/${data.scene}/${data.id}
   transform_fp: ${data.exp_dir}/transform.json
-  scene_transform_fp: ${data.exp_root}/${data.name}/${data.scene}/scene_transform.json
+  scene_transform_fp: null
 
   # nvs exp
   # Can be different from exp_root. e.g. Share pose with another exp.
   nvs_root: ${data.exp_root}
   nvs_dir: ${data.nvs_root}/${data.name}/${data.scene}
-  lora_ckpt_fp: ${data.nvs_root}/${data.name}/lora.ckpt
-  resume_ckpt_fp: null
+  lora_ckpt_fp: ${data.nvs_dir}/lora.ckpt
   demo_fp:  ${data.nvs_dir}/demo.png
 
 model:
-  name: zero123adv
-  args:
-    pretrained_model_name_or_path: ldm/ckpt/zero123-xl.ckpt
-    pretrained_config: ldm/ckpt/sd-objaverse-finetune-c_concat-256.yaml
-    vram_O: false
+  # name: zero123
+  # args:
+  #   pretrained_model_name_or_path: ldm/ckpt/zero123-xl.ckpt
+  #   pretrained_config: ldm/ckpt/sd-objaverse-finetune-c_concat-256.yaml
+  #   vram_O: false
 
 pose:
   # image_dir: ${data.image_dir}
@@ -76,48 +74,40 @@ pose:
   #       patience: 10
 
 finetune:
-  image_dir: ${data.image_dir}
-  transform_fp: ${data.scene_transform_fp}
-  lora_ckpt_fp: ${data.lora_ckpt_fp}
-  lora_rank: 12
-  lora_target_replace_module: [CrossAttention, GEGLU]
+  # image_dir: ${data.image_dir}
+  # transform_fp: ${data.transform_fp}
+  # lora_ckpt_fp: ${data.lora_ckpt_fp}
+  # lora_rank: 12
+  # lora_target_replace_module: [CrossAttention, GEGLU]
 
-  args:
-    resume_ckpt_fp: ${data.resume_ckpt_fp}
-    max_step: 1000
-    batch_size: 8
-    consist_loss_ratio: 2
-    pred_loss_ratio: 1
-    ddpm_steps: [600]
-    gradient_accumelation: 8
-    eval_steps: 25
-    optimizer:
-      name: Adam
-      args:
-        lr: 1e-2
-        betas: [0.9, 0.999]
-    # scheduler:
-    #   name: ReduceLROnPlateau
-    #   args:
-    #     mode: min
-    #     factor: 0.3
-    #     patience: 500
-    scheduler:
-      name: MultiStepLR
-      args:
-        milestones: [250, 500]
-        gamma: 0.5
+  # args:
+  #   max_step: 100
+  #   batch_size: 8
+  #   consist_loss_ratio: 2
+  #   pred_loss_ratio: 1
+  #   ddpm_steps: [600]
+  #   gradient_accumelation: 1
+  #   optimizer:
+  #     name: Adam
+  #     args:
+  #       lr: 1.0e-3
+  #       betas: [0.9, 0.999]
+  #   scheduler:
+  #     name: MultiStepLR
+  #     args:
+  #       milestones: [25]
+  #       gamma: 0.1
 
 inference:
   image_dir: ${data.image_dir}
-  transform_fp: ${data.scene_transform_fp}
-  test_transform_fp: ${data.test_transform_fp}
-  lora_ckpt_fp: ${data.lora_ckpt_fp}
+  transform_fp: ${data.transform_fp}
+  test_transform_fp: null
+  lora_ckpt_fp: null
   demo_fp: ${data.demo_fp}
-  lora_rank: ${finetune.lora_rank}
-  lora_target_replace_module: ${finetune.lora_target_replace_module}
-  use_single_view: false
-  use_multi_view_condition: true
+  lora_rank: 0
+  lora_target_replace_module: null
+  use_single_view: true
+  use_multi_view_condition: false
   n_views: 16
   theta: -30
   radius: 1.5
