@@ -2,7 +2,6 @@ import argparse
 import itertools
 import multiprocessing
 import os
-import wandb
 import json
 import numpy as np
 
@@ -129,15 +128,16 @@ def main(config, mode, gpu_ids):
     print(f"[INFO] Found {len(scenes)} scenes")
 
     # split scenes and multi-process
-    scenes = split_list(scenes, len(gpu_ids))
-    processes = []
-    for i, gpu_id in enumerate(gpu_ids):
-        p = multiprocessing.Process(target=worker, args=(config, mode, scenes[i], ids, gpu_id, wb_run))
-        processes.append(p)
-        p.start()
-    # print(f"[INFO] Started {len(processes)} processes")
-    for p in processes:
-        p.join()
+    worker(config, mode, scenes, ids, gpu_ids[0], wb_run)
+    # scenes = split_list(scenes, len(gpu_ids))
+    # processes = []
+    # for i, gpu_id in enumerate(gpu_ids):
+    #     p = multiprocessing.Process(target=worker, args=(config, mode, scenes[i], ids, gpu_id, wb_run))
+    #     processes.append(p)
+    #     p.start()
+    # # print(f"[INFO] Started {len(processes)} processes")
+    # for p in processes:
+    #     p.join()
 
     if wb_run:
         wb_run.finish()
@@ -158,8 +158,12 @@ if __name__ == "__main__":
     args, extras = parser.parse_known_args()
     config = load_config(args.config, cli_args=extras)
     set_random_seed(config[0].seed)
+    
+    # import warnings
+    # warnings.filterwarnings("ignore", category=UserWarning)
     main(
         config,
         [args.pose, args.zero123, args.nvs, args.infer, args.m_nvs, args.m_infer, args.mgen_nvs, args.mgen_infer],
         args.gpu_ids
     )
+

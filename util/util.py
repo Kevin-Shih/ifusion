@@ -109,7 +109,7 @@ def start_wabdb(config, conf_dict, mode, eval=False) -> Optional[wandb.Run]:
             project="iFusion-Adv",
             group=f'{config.log.group_name}',
             name=f'{config.log.run_name}',
-            settings=wandb.Settings(x_disable_stats=True, x_save_requirements=False),
+            settings=wandb.Settings(x_disable_stats=False, x_save_requirements=False),
             config={
                 "start_date": f'{mon:02d}-{mday:02d}',
                 "start_time": f'{hours:02d}-{mins:04.1f}',

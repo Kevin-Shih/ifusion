@@ -59,7 +59,7 @@ class SingleImageInferenceDataset(Dataset, BaseDataset):
             "distance": latlon[2],
         }
 
-    def loader(self, batch_size=1, num_workers=8, **kwargs):
+    def loader(self, batch_size=1, num_workers=2, **kwargs):
         return DataLoader(
             self,
             batch_size=batch_size,
@@ -107,7 +107,7 @@ class MultiImageInferenceDataset(Dataset, BaseDataset):
             "distance": latlon[:, 2],
         }
 
-    def loader(self, batch_size=1, num_workers=8, **kwargs):
+    def loader(self, batch_size=1, num_workers=2, **kwargs):
         return DataLoader(
             self,
             batch_size=batch_size,

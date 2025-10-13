@@ -19,7 +19,7 @@ runs/*
 syncdreamer_eval_examples/
 
 # Data
-*rendering/
+*rendering
 
 # Experiments
 *exp_*/

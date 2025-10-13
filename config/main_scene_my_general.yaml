@@ -5,7 +5,7 @@ log:
   # group_name: 'scene0_all'
   group_name: 'OO3D'
   # run_name: 'Render1150_FixScene_myGeneral_${finetune.args.consist_loss_ratio}:${finetune.args.pred_loss_ratio}_step${finetune.args.ddpm_steps}_accum8'
-  run_name: 'Render500_OO3D_FromGSO900_General_step${finetune.args.ddpm_steps}_accum8'
+  run_name: 'OO3D_FromGSO900_General_bs32_newlr6'
   run_path: 
 
 data:
@@ -83,17 +83,17 @@ finetune:
 
   args:
     resume_ckpt_fp: ${data.resume_ckpt_fp}
-    max_step: 500
-    batch_size: 8
+    max_step: 1000
+    batch_size: 32
     consist_loss_ratio: 2
     pred_loss_ratio: 1
     ddpm_steps: [600]
-    gradient_accumelation: 8
-    eval_steps: 50
+    gradient_accumelation: 4
+    eval_steps: 25
     optimizer:
       name: Adam
       args:
-        lr: 1e-3
+        lr: 3e-3
         betas: [0.9, 0.999]
     # scheduler:
     #   name: ReduceLROnPlateau
@@ -104,7 +104,7 @@ finetune:
     scheduler:
       name: MultiStepLR
       args:
-        milestones: [50, 150]
+        milestones: [300, 1500]
         gamma: 0.1
 
 inference:
