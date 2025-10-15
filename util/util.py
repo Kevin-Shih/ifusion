@@ -88,7 +88,7 @@ def start_wabdb(config, conf_dict, mode, eval=False) -> Optional[wandb.Run]:
     elif config.log.run_path:
         print(f'[INFO] Resuming wandb run from \'{config.log.run_path}\'. Ignoring group_name and run_name arguments.')
         wb_api_run: wandb.Run = wandb.Api().run(f'kevin-shih/iFusion-Adv/{config.log.run_path.split("/")[-1]}')
-        print(f'Confirm Resuming from \'{wb_api_run.name}\', id:\'{wb_api_run.id}\'? [Y/N]')
+        print(f'Confirm Resuming from \'{wb_api_run.group}\', \'{wb_api_run.name}\', id:\'{wb_api_run.id}\'? [Y/N]')
         user_input = input()
         if user_input.lower() in ('y', 'yes'):
             wb_run = wandb.init(

@@ -25,3 +25,4 @@ syncdreamer_eval_examples/
 *exp_*/
 *wandb/
 test.py
+objaverse2HPC.sh
